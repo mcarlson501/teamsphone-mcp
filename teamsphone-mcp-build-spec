@@ -1,0 +1,381 @@
+# Teams Phone MCP Server — Build Project Specification
+
+**Project codename:** `teamsphone-mcp`
+**Version:** 1.0 (build-ready spec)
+**Intended reader:** A coding agent (GitHub Copilot / Claude Code) plus the human reviewing its PRs
+**License target:** Apache 2.0 (explicit patent grant)
+
+---
+
+## 1. Project Charter
+
+### What we are building
+A standalone, open-sourceable **MCP server** that exposes Microsoft Teams Phone administration operations (MACD: Move / Add / Change / Delete, plus read/diagnostic tools) as MCP tools. It executes real changes against Microsoft 365 tenants via the **Microsoft Teams PowerShell module** (primary, because most Teams Phone voice-admin surface — call queues, auto attendants, voice routing, number assignment — is only fully supported there) and **Microsoft Graph** (secondary, for users/licensing/reporting).
+
+The server is **tenant-agnostic**: it contains zero customer data and zero baked-in credentials. Tenant identity + credentials are supplied per session/call. One codebase serves a solo admin's single tenant (self-hosted) and a consultant's 50 tenants (always-on multi-tenant instance) identically.
+
+### What we are NOT building (non-goals for this repo)
+- No ticket triage, LLM prompting, or Help Scout/FreeScout integration (orchestrator's job, separate private repo)
+- No tenant registry or customer database (orchestrator supplies tenant context)
+- No Direct Routing / SBC tooling, no number porting execution, no licensing procurement
+- No UI
+
+### Design principles (inherited from the parent architecture — enforce in every PR)
+1. **Deterministic execution**: the LLM chooses tools + parameters; this server's code does the work. No dynamic script generation, no arbitrary command execution tool, ever.
+2. **Every write follows**: snapshot → preflight → dry-run → execute → verify → structured result.
+3. **Policy lives server-side**: risk tiers, dry-run defaults, and destructive-op confirmation are enforced in server code — they are not suggestions to the model.
+4. **Hard tenant isolation**: no execution context is ever reused across tenants.
+5. **Idempotency**: re-running a completed operation detects "already in desired state" and no-ops successfully.
+
+---
+
+## 2. Reference Template Assessment (coleam00/remote-mcp-server-with-auth)
+
+Reviewed. **Borrow the patterns, reject the platform.**
+
+**Borrow:**
+- Modular tools layout — one tool per file under `src/tools/`, centralized `registerAllTools()` registration
+- Zod-style schema validation on every tool input
+- Dual transport: Streamable HTTP at `/mcp` (primary) + stdio for local single-tenant use
+- Role/permission-gated tool availability (their GitHub-username allowlist → our risk-tier + auth-context gating)
+- Error sanitization before returning to the client; structured logging with user/tenant context on every call
+- MCP Inspector as the standard manual test harness; comprehensive unit tests with mocked backends
+- Optional Sentry (or OpenTelemetry) hook for production monitoring
+
+**Reject (wrong for this project):**
+- **Cloudflare Workers runtime** — cannot host a PowerShell runtime; the Teams admin surface requires `pwsh` + the MicrosoftTeams module. We need a container/VM-hostable process.
+- **GitHub OAuth identity** — wrong identity plane. Client auth is bearer/mTLS for the local phase; tenant-side auth is Entra app-only with certificates.
+- **`executeDatabase`-style generic "run anything" write tool** — the single most important thing NOT to copy. Our writes are enumerated, single-purpose, schema-validated tools only.
+- Durable Objects / KV state — our state model is per-tenant PowerShell sessions in-process + append-only audit files.
+
+---
+
+## 3. Tech Stack Decision
+
+**Host: .NET 8 console/web service using the official MCP C# SDK (`ModelContextProtocol` NuGet).**
+**Execution: in-process PowerShell via `Microsoft.PowerShell.SDK` (System.Management.Automation) with the MicrosoftTeams module, plus Microsoft Graph .NET SDK for Graph calls.**
+
+Rationale:
+- PowerShell hosting is first-class in .NET (runspaces in-proc: precise lifecycle + isolation control, no fragile stdout parsing of spawned processes)
+- MSAL.NET / Azure.Identity for certificate app-only auth; Azure Key Vault SDK for the credential-provider plugin later
+- Single deployable container: `mcr.microsoft.com/dotnet/aspnet:8.0` + pwsh + MicrosoftTeams module baked into the image
+
+**Contributor-facing rule that keeps the community angle alive:** tool *business logic* lives in PowerShell script files (`tools/<tool-name>/run.ps1`) invoked by the .NET host through a strict contract (§6). Community contributors — Teams admins who know PowerShell, not C# — add tools by writing a manifest + a .ps1 + tests. They never touch the host engine.
+
+**Acceptable alternative** (if the human building this prefers Node): TypeScript host with the official MCP TS SDK spawning `pwsh` per call. Everything else in this spec — contracts, layout, phases — stays identical. Do not mix: pick one host and commit.
+
+---
+
+## 4. Architecture
+
+```
+                        MCP client (orchestrator / Claude / Foundry / Hermes)
+                                          │
+                     Streamable HTTP /mcp  (or stdio, single-tenant local)
+                                          │
+┌─────────────────────────── teamsphone-mcp host (.NET) ───────────────────────────┐
+│                                                                                   │
+│  Transport & Auth middleware (client bearer token / mTLS; reject unauthenticated) │
+│                │                                                                  │
+│  Tool Registry (built from /tools/*/manifest.yaml at startup; exposes MCP tools   │
+│                 with annotations: readOnlyHint / destructiveHint / idempotentHint)│
+│                │                                                                  │
+│  Policy Engine (deterministic, pre-execution):                                    │
+│    - schema validation (reject unknown/missing params)                            │
+│    - risk tier vs. session's allowed ceiling                                      │
+│    - dryRun enforcement (writes default dryRun=true; execute requires             │
+│      confirmationToken issued by the dry-run response)                            │
+│    - blast-radius check (bulk param counts vs. manifest max)                      │
+│                │                                                                  │
+│  Execution Engine:                                                                │
+│    - TenantSessionManager: per-tenant PowerShell runspace, keyed by tenantId      │
+│    - runs the tool's run.ps1 inside that tenant's runspace                        │
+│    - pipeline stages: snapshot → preflight → dryrun → execute → verify           │
+│                │                                                                  │
+│  Credential Provider (interface):                                                 │
+│    - v1: local encrypted config / env (self-host mode)                            │
+│    - v2: Azure Key Vault implementation (consultant mode)                         │
+│                │                                                                  │
+│  Audit Logger: append-only JSONL per tenant per day + OpenTelemetry traces        │
+└───────────────────────────────────────┬──────────────────────────────────────────┘
+                                        │ Connect-MicrosoftTeams (cert app-only)
+                                        │ Graph SDK (client credential + cert)
+                                        ▼
+                          Target customer Microsoft 365 tenant
+```
+
+### 4.1 TenantSessionManager — the critical component
+
+Rules (encode as invariants + tests, not comments):
+- A runspace is created FOR one tenantId and is destroyed WITHOUT ever serving another. Re-keying a runspace is forbidden by construction (tenantId is immutable on the session object).
+- Session creation: new runspace → import MicrosoftTeams module → `Connect-MicrosoftTeams` with that tenant's cert → mark ready. (This is the expensive step, 10–30s; it's paid once per tenant per warm period, not per call.)
+- Idle timeout (default 10 min, configurable): disconnect + dispose runspace.
+- Concurrency: **one write at a time per tenant** (serialize via per-tenant semaphore); reads may run concurrent with reads but not with a write.
+- Cap on concurrent live sessions (default 10) with LRU eviction; a hard cap on total memory is a v1.1 concern.
+- On any auth failure or runspace-level error: dispose the session entirely; never attempt to repair a possibly-corrupted session.
+
+---
+
+## 5. Repository Structure
+
+```
+teamsphone-mcp/
+├── README.md                     # quickstart: self-host in <15 min
+├── LICENSE                       # Apache 2.0
+├── CONTRIBUTING.md               # how to add a tool (manifest + ps1 + tests)
+├── SECURITY.md
+├── Dockerfile                    # dotnet8 + pwsh + MicrosoftTeams module (pinned version)
+├── docker-compose.yml            # local run with mounted config
+├── docs/
+│   ├── architecture.md           # condensed from this spec
+│   ├── setup-entra-app.md        # step-by-step: app registration, cert, API perms,
+│   │                             #   role assignment (Teams Communications Administrator)
+│   ├── tool-contract.md          # §6 of this spec, maintained as living doc
+│   └── orchestrator-integration.md
+├── src/
+│   ├── TeamsPhoneMcp.Host/       # entrypoint, transports, DI wiring
+│   ├── TeamsPhoneMcp.Core/       # tool registry, policy engine, pipeline, session mgr
+│   ├── TeamsPhoneMcp.Credentials/# ICredentialProvider + Local + KeyVault impls
+│   └── TeamsPhoneMcp.Audit/      # JSONL audit writer, OTel exporters
+├── tools/                        # ← the open, contributable surface
+│   ├── _template/                # copy-me starter: manifest.yaml, run.ps1, run.Tests.ps1
+│   ├── common/                   # TeamsPhoneMcp.Common.psm1: result envelope helpers,
+│   │                             #   retry-with-backoff (429s), snapshot helpers
+│   ├── get-tenant-voice-snapshot/
+│   ├── get-user-voice-config/
+│   ├── list-phone-numbers/
+│   ├── get-callqueue-config/
+│   ├── get-autoattendant-config/
+│   ├── assign-phone-number/
+│   ├── move-number-between-users/
+│   ├── update-callqueue-members/
+│   └── ... (v1 set in §8)
+└── tests/
+    ├── unit/                     # host logic, policy engine (xUnit)
+    ├── tools/                    # Pester tests per tool with mocked cmdlets
+    └── integration/              # runs against a real dev tenant (gated, manual/CI-secret)
+```
+
+---
+
+## 6. Core Contracts (implement exactly; these are the API)
+
+### 6.1 Tool manifest — `tools/<name>/manifest.yaml`
+
+```yaml
+id: move-number-between-users        # kebab-case, = folder name
+version: 1.0.0                       # semver, bump on any behavior change
+summary: Reassign a phone number from one user to another
+category: move                       # move|add|change|delete|read
+riskTier: 2                          # 0 read, 1 low, 2 medium, 3 high
+telephonyModels: [callingPlans, operatorConnect]
+annotations:                         # surfaced as MCP tool annotations
+  readOnlyHint: false
+  destructiveHint: false
+  idempotentHint: true
+inputs:                              # → JSON Schema for the MCP tool; host validates
+  sourceUserUpn: {type: string, format: upn, required: true}
+  targetUserUpn: {type: string, format: upn, required: true}
+maxBlastRadius: 1                    # max entities modified per call
+timeoutSeconds: 300
+preflight:                           # human-readable list; run.ps1 implements them
+  - source user has the number assigned
+  - target user is EV-capable and licensed
+  - number type matches tenant telephony model
+verification:
+  - number assigned to target
+  - number released from source
+rollback: reassign original number to source user
+```
+
+### 6.2 PowerShell tool contract — `tools/<name>/run.ps1`
+
+- Receives: `-Stage <snapshot|preflight|dryrun|execute|verify|rollback>` + `-InputJson <string>` (validated params) + an already-connected tenant runspace (the script never authenticates).
+- Returns on stdout: exactly one JSON object (the stage result). Anything on stderr = stage failure.
+- Must be idempotent at the `execute` stage; must implement `rollback` if `riskTier >= 2`.
+- Must use `tools/common` helpers for retry (throttling/429 with exponential backoff + jitter) and result envelopes — no raw `Start-Sleep` polling loops; use bounded polling helpers for replication delays.
+
+### 6.3 Result envelope (every tool call returns this to the MCP client)
+
+```json
+{
+  "status": "succeeded | dryRunCompleted | preflightFailed | failed | rolledBack | verifyFailedRolledBack",
+  "toolId": "move-number-between-users",
+  "toolVersion": "1.0.0",
+  "tenantId": "…",
+  "correlationId": "uuid",
+  "dryRun": false,
+  "confirmationToken": "…",          // present only on dryRunCompleted; required to execute
+  "summary": "Moved +1 555 0100 from a@x.com to b@x.com",
+  "diff": { "before": { }, "after": { } },
+  "preflight": [ {"check": "…", "passed": true, "detail": "…"} ],
+  "verification": [ {"check": "…", "passed": true} ],
+  "timings": { "totalMs": 0, "stages": { } },
+  "error": null                       // sanitized; never raw cmdlet dumps with tenant PII
+}
+```
+
+### 6.4 Write-safety protocol (host-enforced, non-bypassable)
+
+1. Any tool with `riskTier >= 1` called without `dryRun:false` runs **dry-run only** and returns `confirmationToken` (HMAC over toolId + canonicalized params + tenantId + expiry; TTL 15 min).
+2. Executing requires `dryRun:false` **and** a valid `confirmationToken` whose params hash matches exactly. Changed params = new dry-run required.
+3. `riskTier 3` additionally requires the session to have been opened with `allowTier3: true` — a deliberate per-connection opt-in.
+4. Tier 0 reads skip the token flow entirely.
+5. **`whatIf` is an accepted alias for `dryRun`** on every write tool (PowerShell-native naming; M365 admins will reach for it instinctively). Semantics are identical to PowerShell's `-WhatIf` done properly: preflight checks run against **live tenant data**, the exact planned cmdlet calls are rendered with resolved parameters, and zero writes occur. It is a real simulation grounded in real reads — not fabricated output.
+6. **Session-level what-if mode**: a session opened with `whatIfMode: true` cannot execute, period. Every write returns the simulated result with `"simulated": true` in the envelope and **no confirmation token is issued**, so nothing downstream can accidentally promote it to a real change. Use cases: demos, training a new orchestrator, testing prompts against production config safely.
+7. **Server-level mode ceiling** via config/env `TEAMSPHONE_MCP_MODE = full | whatif | readonly`. `whatif` forces rule 6 on all sessions; `readonly` exposes only tier-0 tools. Recommended defaults: `whatif` for the first week in any newly onboarded tenant and for any evaluation install — an architect can point this at their production tenant on day one with zero risk.
+
+This means even a confused or prompt-injected client cannot one-shot a destructive change: the two-step is structural, and what-if ceilings at the session and server level make "can't write" a deployment guarantee rather than a promise.
+
+### 6.5 Session initialization (multi-tenant context)
+
+Client establishes tenant context per session (or per call for stateless HTTP): `{ tenantId, credentialRef, allowTier3?, maxRiskTier? }`. `credentialRef` is a name resolved by the ICredentialProvider — **raw certs/secrets never travel over MCP**. Self-host mode: credentialRef maps to local encrypted store entries; consultant mode: Key Vault secret names.
+
+---
+
+## 7. Security Requirements (acceptance-blocking)
+
+- Client-facing auth from day one, even locally: static bearer token minimum (config-supplied), mTLS optional flag. Unauthenticated `/mcp` requests: 401, no tool listing.
+- No secrets in logs, ever. Audit entries carry `credentialRef` names, never material. Add a log-scrubber test that greps output for cert thumbprint/secret patterns.
+- No generic execution tool. CI check: the tool registry must fail startup if any manifest requests `type: script` params or a tool named like run/exec/invoke-command.
+- Error sanitization: cmdlet exceptions are mapped to stable error codes + safe messages; raw exception text goes to the audit log only.
+- Dependency pinning: MicrosoftTeams module version pinned in the Dockerfile; Renovate/Dependabot config included; upgrades are PRs with the integration suite run.
+- Rate limiting per session (default 30 calls/min) to keep a runaway client from hammering a tenant into throttling.
+
+## 8. Tool Set — Full Operational Coverage
+
+Design intent: this is an **operational management toolset**, not just MACD execution. The target user is any M365 architect responsible for a Teams Phone environment — including ones who are *not* voice specialists. Two consequences ripple through every tool:
+
+- **Diagnostic and reporting tools carry plain-English findings.** Composite tools return a `findings[]` array where each item has `severity`, `what` (observed state), `why` (why it matters), and `fix` (which tool or admin action remediates it). A generalist admin should be able to act on output without knowing what a dial plan is beforehand.
+- **Reads and diagnostics are the majority of the catalog on purpose.** Most operational value for non-experts is "tell me what's wrong and what changed" — writes are the smaller, more guarded half.
+
+### Phase A — Inventory & configuration reads (tier 0)
+1. `get-tenant-voice-snapshot` — full config export: numbers, EV users, policies, CQ/AA topology, emergency addresses, schedules. (Onboarding discovery + pre-change backup source.)
+2. `get-user-voice-config` — one user: number, policies, licenses, EV status, emergency location
+3. `list-phone-numbers` — inventory w/ assignment status, number type, range, filters (e.g., unassigned only)
+4. `get-callqueue-config` / 5. `get-autoattendant-config` — full object detail incl. resolved targets
+6. `check-user-licensing` — EV/Calling Plan license state for a UPN + tenant SKU availability
+7. `list-emergency-addresses` — validated civic addresses + locations
+8. `list-voice-policies` — all voice-relevant policy types with assignment counts
+9. `list-resource-accounts` — RA inventory w/ number class, license, attached CQ/AA
+10. `get-schedules` — business hours + holiday schedules and which AAs reference them
+
+### Phase B — Diagnostics & troubleshooting (tier 0) — the "why isn't this working" set
+11. `diagnose-user-voice` — composite: license → EV → number → policy chain → dial plan → emergency location; ordered findings with fixes. The first tool a non-expert reaches for on "Bob can't make calls."
+12. `trace-call-flow` — given a dialed number, resolve the full path: number → RA → AA menu tree → CQs → agents; flags deleted/broken/looping targets. (The tool voice experts will evangelize.)
+13. `test-dialplan-number` — effective normalization of a dialed string for a given user
+14. `diagnose-callqueue-health` — zero opted-in agents, unreachable overflow/timeout targets, presence-routing starvation
+15. `get-pstn-usage` — PSTN call records for user/number/date range (Calling Plans + Operator Connect)
+16. `get-call-quality-summary` — call quality for a user/time window via Graph callRecords; surfaces the evidence for "calls sound bad" tickets
+17. `find-orphaned-objects` — RAs without numbers/licenses, AAs targeting deleted CQs, empty CQs in call paths, EV users without numbers, unassigned custom policies
+18. `run-tenant-health-check` — composite misconfiguration checklist across all of the above, severity-ranked with remediation pointers. Designed to be the "run this monthly" flagship for generalist admins.
+
+### Phase C — Reporting (tier 0)
+19. `report-number-utilization` — assigned/free/aging by range and type; forecast exhaustion
+20. `report-license-utilization` — voice SKUs assigned vs. available vs. wasted (licensed, never enabled)
+21. `report-emergency-coverage` — voice users lacking an emergency location (compliance-critical)
+22. `report-policy-assignments` — user × policy-type matrix, exportable
+23. `report-change-history` — human-readable change report generated from this server's own audit log (§9)
+
+### Phase D — Core user-level writes (tier 1–2)
+24. `assign-phone-number` (add) — license check → EV enable → assign → policy set
+25. `remove-phone-number` (delete, tier 2) — release to inventory/carrier pool
+26. `move-number-between-users` (move, tier 2)
+27. `onboard-voice-user` (add, tier 2, composite) — the full new-hire flow in one call
+28. `offboard-voice-user` (delete, tier 2, composite) — strip EV, remove memberships, release number, disposition report
+29. `update-callqueue-members` (tier 1) — add/remove agents
+30. `update-user-calling-policies` (tier 1) — assignment from existing policies only
+31. `update-user-voicemail-settings` (tier 1) — voicemail policy + per-user settings
+32. `set-caller-id-assignment` (tier 1) — assign existing caller ID policy / RA substitution
+33. `update-user-emergency-location` (tier 2) — existing validated addresses only
+
+### Phase E — Shared-object writes (tier 2–3)
+34. `update-callqueue-settings` (tier 2) — routing method, thresholds, overflow/timeout targets
+35. `update-holiday-schedule` (tier 2) — the perennial "add the Christmas closure" operation
+36. `update-autoattendant-settings` (tier 3) — menus, greetings, hours, operator target
+37. `create-callqueue-from-template` / 38. `create-autoattendant-from-template` (tier 3)
+39. `create-emergency-address` (tier 3) — address validation gate enforced before creation
+40. `bulk-assign-numbers` (tier 3) — CSV-style batch with explicit per-call blast-radius declaration
+
+### Phase F — Audit & server operations (tier 0, local — no tenant connection)
+41. `query-audit-log` — filter this server's audit store by tenant, date range, tool, status, caller
+42. `get-change-detail` — correlationId → full record incl. before/after snapshots and stage timings
+43. `export-audit-report` — per-tenant, per-period change report (Markdown/CSV) suitable for handing to a customer or MSP
+
+Not in v1 (documented as such): porting execution, Direct Routing/SBC, carrier/range ordering, tenant first-enablement, license purchasing, live call control.
+
+---
+
+## 9. Audit, Logging & Review
+
+Auditability is a headline feature, not plumbing: for consultants and MSPs it's contractual evidence; for in-house architects it's the answer to "what changed before this broke."
+
+### 9.1 What gets recorded
+Every tool call — including reads, failures, dry-runs, and policy rejections — produces one audit record:
+`timestamp, correlationId, sessionId, clientId, tenantId, toolId, toolVersion, stage results, params (post-redaction), dryRun/simulated flags, status, errorCode, durations, snapshotRefs`.
+Before/after snapshots are stored as separate artifacts referenced by ID, so the log stays queryable while full state diffs remain retrievable. Manifests may declare `redactParams:` for sensitive inputs; the log scrubber test (§10) enforces that secrets and cert material can never appear.
+
+### 9.2 How it's stored
+- Append-only JSONL, one file per tenant per day, under a configurable audit root. Plain files on purpose: greppable, `jq`-able, Excel-importable, backup-friendly — zero required infrastructure for self-hosters.
+- Optional **hash chaining** (each record carries the previous record's hash): cheap tamper-evidence for environments that need to demonstrate log integrity.
+- Retention: configurable per install (default 400 days); a built-in sweeper prunes expired files and logs the pruning itself.
+- Optional **OpenTelemetry export** mirrors every record as a trace/span for teams that live in App Insights, Grafana, or Sentry — additive, never a replacement for the local files.
+
+### 9.3 How it's reviewed — four paths, least to most tooling
+1. **Ask the agent**: Phase F tools mean any connected MCP client can answer "what changed in Contoso last Tuesday?" or "show me every failed write this month" — the audit trail is self-serve through the same interface as everything else.
+2. **Raw files**: JSONL + `jq`/PowerShell/Excel for ad-hoc forensics without the server even running.
+3. **Generated reports**: `export-audit-report` produces the customer-facing monthly change summary (for MSP/consultant use, this is a deliverable you can attach to an invoice).
+4. **Observability stack**: OTel export for dashboards, alerting on failure spikes, and correlation with other systems.
+
+Every result envelope already carries the `correlationId`, so external systems (tickets, PRs, change records) link back to the exact audit entry and snapshots with one ID.
+
+## 10. Testing Strategy
+
+- **Unit (xUnit)**: policy engine (token flow, tier gating, blast radius), session manager invariants (tenant immutability, eviction, semaphore), manifest loader (bad manifests fail startup).
+- **Pester per tool**: every stage with mocked cmdlets; failure-path tests (preflight fail, execute throw → rollback invoked, verify fail → rolledBack status).
+- **Isolation test (required)**: simulate interleaved calls for tenants A and B; assert no session object, variable, or connection crosses. This test is the guardian of invariant #4.
+- **Integration (gated)**: against a real M365 dev tenant (E5 dev subscription + Teams Phone trial licenses) — happy path per Phase A/B tool, throttling behavior, token expiry mid-call.
+- **Manual harness**: MCP Inspector connect script documented in README.
+
+## 11. Build Phases for the Coding Agent
+
+Work in small PRs; each milestone has acceptance criteria the human verifies before the next begins.
+
+**M0 — Skeleton (host + transport + one fake tool)**
+Scaffold solution, MCP C# SDK wired, stdio + Streamable HTTP, bearer auth middleware, `ping` tool. ✅ MCP Inspector connects over both transports; unauthenticated HTTP rejected.
+
+**M1 — Tool registry + policy engine (no PowerShell yet)**
+Manifest loader → JSON Schema → MCP tool registration with annotations; dry-run/confirmation-token flow; tier gating; blast-radius checks; `_template` folder. ✅ Unit tests green; a mock write tool demonstrates the full two-step token flow through Inspector.
+
+**M2 — PowerShell execution engine + tenant sessions**
+Runspace hosting, TenantSessionManager with all §4.1 invariants, stage pipeline runner, `tools/common` module, local credential provider. ✅ Isolation test passes; `get-user-voice-config` runs end-to-end against the dev tenant.
+
+**M3 — Phase A reads + audit foundation**
+All 10 Phase A tools + Pester suites + the §9 audit pipeline (JSONL schema, redaction, correlationIds, retention sweeper). ✅ Snapshot of dev tenant completes; every call (incl. a forced failure) produces a valid audit record.
+
+**M4 — Write pipeline proof (one tool, full depth)**
+`move-number-between-users` implementing every stage incl. rollback. This PR sets the quality bar. ✅ Dry-run→confirm→execute→verify demonstrated on dev tenant; forced verify-failure produces `verifyFailedRolledBack` with both snapshots in audit.
+
+**M5 — Remaining Phase D write tools** ✅ Pester green; integration happy-paths green; session/server what-if modes demonstrated blocking execution.
+
+**M5.5 — Diagnostics & reporting (Phases B–C) + Phase F audit tools**
+Read-only, so lower risk than M5 but the highest adoption value: diagnose-user-voice, trace-call-flow, run-tenant-health-check, the report-* set, and query-audit-log/get-change-detail/export-audit-report. ✅ Health check against the deliberately misconfigured dev tenant surfaces seeded faults with correct findings/fix text; export-audit-report renders the M3–M5 change history.
+
+**M6 — Hardening + docs + container**
+Rate limiting, log scrubber test, Dockerfile with pinned module, docs complete, GitHub Actions CI (build, unit, Pester, lint, secret-scan), first tagged release. ✅ `docker compose up` + documented Entra setup → working server in under 15 minutes on a clean machine.
+
+**M7 (post-v1)** — Phase E shared-object writes, Key Vault credential provider, OTel exporter, hash-chained audit option, ghcr/npm publishing, MCP catalog listings.
+
+## 12. Definition of Done (every PR)
+- Manifest schema-valid; version bumped if behavior changed
+- Unit/Pester tests included and green; isolation test untouched or strengthened, never weakened
+- No secrets, tenant names, or real numbers in code, tests, or fixtures
+- Audit log entries produced for every execution path incl. failures
+- README/docs updated when contracts or setup change
+
+## 13. Decisions the Human Must Make Before M2 (agent: stop and ask)
+1. Dev/test tenant: M365 developer tenant + Teams Phone trial or paid test licenses — which, and who provisions numbers in it?
+2. Cert strategy for dev: self-signed OK for the dev tenant app registration? (yes recommended)
+3. Confirm .NET host choice vs. TypeScript alternative (spec assumes .NET).
+4. Public repo from day one, or private until M4 then open?
+5. Idle-timeout and session-cap defaults acceptable, or tune for the always-on local-hardware deployment?
