@@ -12,7 +12,7 @@ namespace TeamsPhoneMcp.Host;
 ///   • stdio for local single-tenant use (selected with <c>--stdio</c> or
 ///     <c>TEAMSPHONE_MCP_STDIO=true</c>; treated as locally trusted, no bearer)
 /// </summary>
-public static class Program
+public class Program
 {
     public static async Task Main(string[] args)
     {
