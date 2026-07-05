@@ -89,7 +89,7 @@ public class BearerAuthTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
-    public async Task Mcp_WithTokenAtExactMaxLength_IsEvaluatedNormally()
+    public async Task Mcp_WithTokenAtExactMaxLength_Returns401()
     {
         // A token exactly at the limit that does not match the configured token
         // must still yield 401, not be silently rejected by the length guard.

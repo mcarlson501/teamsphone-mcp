@@ -31,6 +31,12 @@ public sealed class BearerAuthMiddleware
         _protectedPath = protectedPath;
 
         var token = options.Value.BearerToken;
+        if (!string.IsNullOrEmpty(token) && token.Length > MaxTokenLength)
+        {
+            throw new ArgumentException(
+                $"Configured bearer token exceeds the maximum allowed length of {MaxTokenLength} characters.",
+                nameof(options));
+        }
         // Store the SHA-256 hash of the expected token so the comparison is
         // always between two fixed-length (32-byte) values, preventing
         // length-based timing leaks from CryptographicOperations.FixedTimeEquals.
