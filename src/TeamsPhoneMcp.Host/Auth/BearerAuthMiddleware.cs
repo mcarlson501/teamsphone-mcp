@@ -12,10 +12,13 @@ namespace TeamsPhoneMcp.Host.Auth;
 /// </summary>
 public sealed class BearerAuthMiddleware
 {
+    // Reject tokens longer than this to prevent memory/CPU DoS via oversized headers.
+    internal const int MaxTokenLength = 2048;
+
     private readonly RequestDelegate _next;
     private readonly ILogger<BearerAuthMiddleware> _logger;
     private readonly PathString _protectedPath;
-    private readonly byte[]? _expectedTokenBytes;
+    private readonly byte[]? _expectedTokenHash;
 
     public BearerAuthMiddleware(
         RequestDelegate next,
@@ -28,7 +31,12 @@ public sealed class BearerAuthMiddleware
         _protectedPath = protectedPath;
 
         var token = options.Value.BearerToken;
-        _expectedTokenBytes = string.IsNullOrEmpty(token) ? null : Encoding.UTF8.GetBytes(token);
+        // Store the SHA-256 hash of the expected token so the comparison is
+        // always between two fixed-length (32-byte) values, preventing
+        // length-based timing leaks from CryptographicOperations.FixedTimeEquals.
+        _expectedTokenHash = string.IsNullOrEmpty(token)
+            ? null
+            : SHA256.HashData(Encoding.UTF8.GetBytes(token));
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -39,7 +47,7 @@ public sealed class BearerAuthMiddleware
             return;
         }
 
-        if (_expectedTokenBytes is null)
+        if (_expectedTokenHash is null)
         {
             // Fail closed: no token configured means nothing can authenticate.
             _logger.LogWarning(
@@ -71,7 +79,8 @@ public sealed class BearerAuthMiddleware
         }
 
         var value = header[scheme.Length..].Trim();
-        if (value.Length == 0)
+        // Reject oversized tokens before allocating to prevent memory/CPU DoS.
+        if (value.Length == 0 || value.Length > MaxTokenLength)
         {
             return false;
         }
@@ -80,8 +89,11 @@ public sealed class BearerAuthMiddleware
         return true;
     }
 
+    // Hash the presented token to the same fixed length as the stored hash so
+    // CryptographicOperations.FixedTimeEquals always receives equal-length spans,
+    // eliminating the early-exit length leak.
     private bool IsValid(byte[] presented) =>
-        CryptographicOperations.FixedTimeEquals(presented, _expectedTokenBytes!);
+        CryptographicOperations.FixedTimeEquals(SHA256.HashData(presented), _expectedTokenHash!);
 
     private static async Task RejectAsync(HttpContext context)
     {
