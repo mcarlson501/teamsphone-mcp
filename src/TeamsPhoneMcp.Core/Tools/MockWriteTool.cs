@@ -21,10 +21,7 @@ public sealed class MockWriteTool(IToolManifestCatalog manifestCatalog, WritePol
         bool? dryRun = null,
         [Description("Alias for dryRun, matching PowerShell WhatIf semantics.")] bool? whatIf = null,
         [Description("Confirmation token issued by a prior dry-run call.")] string? confirmationToken = null,
-        [Description("Declared number of entities affected by this call.")] int blastRadius = 1,
-        [Description("Session opt-in for tier-3 operations.")] bool allowTier3 = false,
-        [Description("Session maximum permitted risk tier.")] int maxRiskTier = 3,
-        [Description("Forces simulation mode and blocks execution.")] bool sessionWhatIfMode = false)
+        [Description("Declared number of entities affected by this call.")] int blastRadius = 1)
     {
         var manifest = manifestCatalog.GetRequired(ToolId);
         var correlationId = Guid.NewGuid().ToString();
@@ -45,9 +42,9 @@ public sealed class MockWriteTool(IToolManifestCatalog manifestCatalog, WritePol
                 whatIf,
                 confirmationToken,
                 blastRadius,
-                allowTier3,
-                maxRiskTier,
-                sessionWhatIfMode),
+                AllowTier3: false,
+                MaxRiskTier: 3,
+                SessionWhatIfMode: false),
             DateTimeOffset.UtcNow);
 
         if (!decision.Approved)

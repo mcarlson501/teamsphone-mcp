@@ -33,7 +33,18 @@ public static class ToolRegistration
 
             if (!string.IsNullOrWhiteSpace(keyFromConfig))
             {
-                return ConfirmationTokenService.FromBase64Key(keyFromConfig, TimeSpan.FromMinutes(15));
+                try
+                {
+                    return ConfirmationTokenService.FromBase64Key(keyFromConfig, TimeSpan.FromMinutes(15));
+                }
+                catch (Exception ex) when (ex is FormatException or ArgumentException)
+                {
+                    throw new InvalidOperationException(
+                        "TEAMSPHONE_MCP_CONFIRMATION_TOKEN_KEY / Policy:ConfirmationTokenKey is set but invalid. " +
+                        "Provide a valid Base64-encoded key of at least 32 bytes. " +
+                        "Use ConfirmationTokenService.CreateRandomBase64Key() to generate one.",
+                        ex);
+                }
             }
 
             logger.LogWarning(
@@ -45,8 +56,13 @@ public static class ToolRegistration
         builder.Services.AddSingleton<IToolManifestCatalog>(sp =>
         {
             var env = sp.GetRequiredService<IHostEnvironment>();
+            var configuration = sp.GetService<IConfiguration>();
             var logger = sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ToolManifestCatalog>>();
-            return new ToolManifestCatalog(Path.Combine(env.ContentRootPath, "tools"), logger);
+            var configuredPath = configuration?["ToolManifests:ToolsRootPath"];
+            var toolsPath = string.IsNullOrWhiteSpace(configuredPath)
+                ? Path.Combine(env.ContentRootPath, "tools")
+                : configuredPath;
+            return new ToolManifestCatalog(toolsPath, logger);
         });
 
         builder.WithTools<PingTool>();

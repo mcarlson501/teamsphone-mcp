@@ -142,7 +142,7 @@ public sealed class ToolManifestCatalog : IToolManifestCatalog
             throw new InvalidOperationException($"Manifest '{manifestPath}' has invalid timeoutSeconds.");
         }
 
-        if (manifest.Inputs.Count == 0)
+        if (manifest.Inputs is null || manifest.Inputs.Count == 0)
         {
             throw new InvalidOperationException($"Manifest '{manifestPath}' must define at least one input.");
         }
@@ -154,7 +154,7 @@ public sealed class ToolManifestCatalog : IToolManifestCatalog
                 throw new InvalidOperationException($"Manifest '{manifestPath}' has an input with an empty name.");
             }
 
-            if (!new[] { "string", "integer", "boolean", "number" }.Contains(input.Type, StringComparer.Ordinal))
+            if (input is null || !new[] { "string", "integer", "boolean", "number" }.Contains(input.Type, StringComparer.Ordinal))
             {
                 throw new InvalidOperationException($"Manifest '{manifestPath}' input '{inputName}' has invalid type.");
             }

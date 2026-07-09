@@ -53,4 +53,74 @@ public class ToolManifestCatalogTests
             Directory.Delete(tempRoot, recursive: true);
         }
     }
+
+    [Fact]
+    public void Catalog_RejectsManifest_WhenInputsSectionIsMissing()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"manifest-tests-{Guid.NewGuid():N}");
+        var toolFolder = Path.Combine(tempRoot, "no-inputs-tool");
+        Directory.CreateDirectory(toolFolder);
+        File.WriteAllText(
+            Path.Combine(toolFolder, "manifest.yaml"),
+            """
+            id: no-inputs-tool
+            version: 1.0.0
+            summary: test
+            category: read
+            riskTier: 0
+            annotations:
+              readOnlyHint: true
+              destructiveHint: false
+              idempotentHint: true
+            maxBlastRadius: 1
+            timeoutSeconds: 30
+            """);
+
+        try
+        {
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => _ = new ToolManifestCatalog(tempRoot, NullLogger<ToolManifestCatalog>.Instance));
+            Assert.Contains("must define at least one input", ex.Message);
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Catalog_RejectsManifest_WhenInputTypeIsMissing()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"manifest-tests-{Guid.NewGuid():N}");
+        var toolFolder = Path.Combine(tempRoot, "bad-input-tool");
+        Directory.CreateDirectory(toolFolder);
+        File.WriteAllText(
+            Path.Combine(toolFolder, "manifest.yaml"),
+            """
+            id: bad-input-tool
+            version: 1.0.0
+            summary: test
+            category: read
+            riskTier: 0
+            annotations:
+              readOnlyHint: true
+              destructiveHint: false
+              idempotentHint: true
+            inputs:
+              tenantId:
+            maxBlastRadius: 1
+            timeoutSeconds: 30
+            """);
+
+        try
+        {
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => _ = new ToolManifestCatalog(tempRoot, NullLogger<ToolManifestCatalog>.Instance));
+            Assert.Contains("has invalid type", ex.Message);
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
 }
