@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using TeamsPhoneMcp.Core.Manifests;
 using TeamsPhoneMcp.Core.Policy;
 using ModelContextProtocol.Server;
@@ -21,7 +23,24 @@ public static class ToolRegistration
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        builder.Services.AddSingleton<IConfirmationTokenService, ConfirmationTokenService>();
+        builder.Services.AddSingleton<IConfirmationTokenService>(sp =>
+        {
+            var configuration = sp.GetService<IConfiguration>();
+            var logger = sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ConfirmationTokenService>>();
+            var keyFromConfig =
+                configuration?["TEAMSPHONE_MCP_CONFIRMATION_TOKEN_KEY"] ??
+                configuration?["Policy:ConfirmationTokenKey"];
+
+            if (!string.IsNullOrWhiteSpace(keyFromConfig))
+            {
+                return ConfirmationTokenService.FromBase64Key(keyFromConfig, TimeSpan.FromMinutes(15));
+            }
+
+            logger.LogWarning(
+                "No persistent confirmation token key configured. Generated an ephemeral key for this process. " +
+                "Set TEAMSPHONE_MCP_CONFIRMATION_TOKEN_KEY to keep confirmation tokens valid across restarts.");
+            return ConfirmationTokenService.FromBase64Key(ConfirmationTokenService.CreateRandomBase64Key(), TimeSpan.FromMinutes(15));
+        });
         builder.Services.AddSingleton<WritePolicyEngine>();
         builder.Services.AddSingleton<IToolManifestCatalog>(sp =>
         {

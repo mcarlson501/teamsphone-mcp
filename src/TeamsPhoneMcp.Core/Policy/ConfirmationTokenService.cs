@@ -21,14 +21,27 @@ public sealed class ConfirmationTokenService : IConfirmationTokenService
     private readonly byte[] _key;
     private readonly TimeSpan _ttl;
 
-    public ConfirmationTokenService() : this(RandomNumberGenerator.GetBytes(32), TimeSpan.FromMinutes(15))
-    {
-    }
-
     public ConfirmationTokenService(byte[] key, TimeSpan ttl)
     {
+        ArgumentNullException.ThrowIfNull(key);
+        if (key.Length < 32)
+        {
+            throw new ArgumentException("Confirmation token key must be at least 32 bytes.", nameof(key));
+        }
+
         _key = key;
         _ttl = ttl;
+    }
+
+    public static ConfirmationTokenService FromBase64Key(string base64Key, TimeSpan ttl)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(base64Key);
+        return new ConfirmationTokenService(Convert.FromBase64String(base64Key), ttl);
+    }
+
+    public static string CreateRandomBase64Key()
+    {
+        return Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
     }
 
     public string Issue(string toolId, string tenantId, JsonElement toolParams, DateTimeOffset nowUtc)

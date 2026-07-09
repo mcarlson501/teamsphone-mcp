@@ -15,7 +15,7 @@ public interface IToolManifestCatalog
 public sealed class ToolManifestCatalog : IToolManifestCatalog
 {
     private static readonly Regex ToolIdRegex = new("^[a-z0-9]+(-[a-z0-9]+)*$", RegexOptions.Compiled);
-    private static readonly Regex SemVerRegex = new("^\\d+\\.\\d+\\.\\d+$", RegexOptions.Compiled);
+    private static readonly Regex SemVerRegex = new(@"^\d+\.\d+\.\d+$", RegexOptions.Compiled);
     private static readonly IDeserializer YamlDeserializer = new DeserializerBuilder()
         .WithNamingConvention(CamelCaseNamingConvention.Instance)
         .IgnoreUnmatchedProperties()
