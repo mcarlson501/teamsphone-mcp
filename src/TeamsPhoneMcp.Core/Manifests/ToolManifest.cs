@@ -1,0 +1,47 @@
+using System.Text.Json.Serialization;
+
+namespace TeamsPhoneMcp.Core.Manifests;
+
+public sealed record ToolManifest
+{
+    public required string Id { get; init; }
+
+    public required string Version { get; init; }
+
+    public required string Summary { get; init; }
+
+    public required string Category { get; init; }
+
+    public required int RiskTier { get; init; }
+
+    public IReadOnlyList<string> TelephonyModels { get; init; } = [];
+
+    public required ToolManifestAnnotations Annotations { get; init; }
+
+    public required IReadOnlyDictionary<string, ToolManifestInput> Inputs { get; init; }
+
+    public int MaxBlastRadius { get; init; }
+
+    public int TimeoutSeconds { get; init; }
+}
+
+public sealed record ToolManifestInput
+{
+    [JsonPropertyName("type")]
+    public required string Type { get; init; }
+
+    [JsonPropertyName("format")]
+    public string? Format { get; init; }
+
+    [JsonPropertyName("required")]
+    public bool Required { get; init; }
+}
+
+public sealed record ToolManifestAnnotations
+{
+    public bool ReadOnlyHint { get; init; }
+
+    public bool DestructiveHint { get; init; }
+
+    public bool IdempotentHint { get; init; }
+}

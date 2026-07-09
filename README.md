@@ -8,10 +8,10 @@ baked-in credentials. Tenant identity and credentials are supplied per session/c
 See [`teamsphone-mcp-build-spec`](./teamsphone-mcp-build-spec) for the full project
 specification and roadmap.
 
-> **Status: Milestone M0 (Skeleton).** This repository currently contains the host
-> skeleton only: dual transport (stdio + Streamable HTTP), bearer-token auth on the
-> HTTP transport, and a single trivial `ping` tool. PowerShell execution, the policy
-> engine, and the real tool catalog arrive in later milestones (M1+).
+> **Status: Milestone M1 (in progress).** The repository now includes the M0 host
+> skeleton plus an initial M1 foundation: a YAML manifest catalog, schema validation,
+> a starter `tools/_template`, and a mock write tool that demonstrates dry-run +
+> confirmation-token flow. PowerShell execution lands in M2.
 
 ## Layout
 
@@ -78,8 +78,11 @@ dotnet run --project src/TeamsPhoneMcp.Host -- --stdio
 3. Choose transport **Streamable HTTP**, URL `http://127.0.0.1:5199/mcp`.
 4. Under **Authentication**, add an `Authorization` header using the `Bearer`
    scheme followed by your configured token.
-5. Connect, then **List Tools** → you should see `ping`. Call it with an optional
-   `message` and confirm the echoed result.
+5. Connect, then **List Tools** → you should see `ping` and
+   `mock-write-user-policy`.
+6. Call `mock-write-user-policy` once without `dryRun:false` to get a
+   `confirmationToken`, then call again with `dryRun:false` and that token to
+   execute the mocked write.
 
 ### Over stdio
 
@@ -87,7 +90,7 @@ dotnet run --project src/TeamsPhoneMcp.Host -- --stdio
 2. Choose transport **STDIO** with:
    - Command: `dotnet`
    - Arguments: `run --project src/TeamsPhoneMcp.Host -- --stdio`
-3. Connect, then **List Tools** → `ping`.
+3. Connect, then **List Tools** → `ping` and `mock-write-user-policy`.
 
 ## Verifying the unauthenticated rejection (acceptance criterion)
 

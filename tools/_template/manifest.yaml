@@ -1,0 +1,14 @@
+id: replace-with-tool-id
+version: 1.0.0
+summary: Replace with a short summary
+category: change
+riskTier: 1
+telephonyModels: [callingPlans, operatorConnect]
+annotations:
+  readOnlyHint: false
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+maxBlastRadius: 1
+timeoutSeconds: 300

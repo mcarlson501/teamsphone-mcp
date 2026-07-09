@@ -7,7 +7,7 @@ namespace TeamsPhoneMcp.UnitTests;
 public class ToolRegistrationTests
 {
     [Fact]
-    public void AddTeamsPhoneTools_RegistersExactlyThePingTool()
+    public void AddTeamsPhoneTools_RegistersPingAndMockWriteTools()
     {
         var services = new ServiceCollection();
         services.AddMcpServer().AddTeamsPhoneTools();
@@ -15,8 +15,8 @@ public class ToolRegistrationTests
         using var provider = services.BuildServiceProvider();
         var tools = provider.GetServices<McpServerTool>().ToList();
 
-        var tool = Assert.Single(tools);
-        Assert.Equal("ping", tool.ProtocolTool.Name);
+        var names = tools.Select(t => t.ProtocolTool.Name).OrderBy(name => name, StringComparer.Ordinal).ToList();
+        Assert.Equal(["mock-write-user-policy", "ping"], names);
     }
 
     [Fact]
