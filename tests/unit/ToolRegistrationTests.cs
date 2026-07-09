@@ -26,7 +26,7 @@ public class ToolRegistrationTests
         services.AddMcpServer().AddTeamsPhoneTools();
 
         using var provider = services.BuildServiceProvider();
-        var tool = provider.GetServices<McpServerTool>().Single();
+        var tool = provider.GetServices<McpServerTool>().Single(t => t.ProtocolTool.Name == "ping");
 
         Assert.NotNull(tool.ProtocolTool.Annotations);
         Assert.True(tool.ProtocolTool.Annotations!.ReadOnlyHint);

@@ -14,11 +14,11 @@ public sealed record ToolManifest
 
     public required int RiskTier { get; init; }
 
-    public IReadOnlyList<string> TelephonyModels { get; init; } = [];
+    public List<string> TelephonyModels { get; init; } = [];
 
     public required ToolManifestAnnotations Annotations { get; init; }
 
-    public required IReadOnlyDictionary<string, ToolManifestInput> Inputs { get; init; }
+    public required Dictionary<string, ToolManifestInput> Inputs { get; init; }
 
     public int MaxBlastRadius { get; init; }
 

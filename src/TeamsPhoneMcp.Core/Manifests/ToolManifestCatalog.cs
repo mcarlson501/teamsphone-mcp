@@ -1,8 +1,7 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using Json.Schema;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 
 namespace TeamsPhoneMcp.Core.Manifests;
 
@@ -15,10 +14,12 @@ public interface IToolManifestCatalog
 
 public sealed class ToolManifestCatalog : IToolManifestCatalog
 {
-    private static readonly JsonSchema Schema = JsonSchema.FromText(ToolManifestSchema.Json);
-    private static readonly JsonSerializerOptions ManifestJsonOptions = new() { PropertyNameCaseInsensitive = true };
-    private static readonly IDeserializer YamlDeserializer = new DeserializerBuilder().Build();
-    private static readonly ISerializer JsonCompatibleYamlSerializer = new SerializerBuilder().JsonCompatible().Build();
+    private static readonly Regex ToolIdRegex = new("^[a-z0-9]+(-[a-z0-9]+)*$", RegexOptions.Compiled);
+    private static readonly Regex SemVerRegex = new("^\\d+\\.\\d+\\.\\d+$", RegexOptions.Compiled);
+    private static readonly IDeserializer YamlDeserializer = new DeserializerBuilder()
+        .WithNamingConvention(CamelCaseNamingConvention.Instance)
+        .IgnoreUnmatchedProperties()
+        .Build();
 
     private readonly IReadOnlyDictionary<string, ToolManifest> _manifestsById;
 
@@ -61,7 +62,8 @@ public sealed class ToolManifestCatalog : IToolManifestCatalog
         foreach (var manifestPath in manifestFiles)
         {
             var directoryName = Path.GetFileName(Path.GetDirectoryName(manifestPath));
-            var manifest = ParseAndValidateManifest(manifestPath);
+            var manifest = ParseManifest(manifestPath);
+            ValidateManifest(manifest, manifestPath);
 
             if (!string.Equals(manifest.Id, directoryName, StringComparison.Ordinal))
             {
@@ -96,26 +98,67 @@ public sealed class ToolManifestCatalog : IToolManifestCatalog
         return manifests;
     }
 
-    private static ToolManifest ParseAndValidateManifest(string manifestPath)
+    private static ToolManifest ParseManifest(string manifestPath)
     {
         var yaml = File.ReadAllText(manifestPath);
-        var yamlObject = YamlDeserializer.Deserialize<object>(yaml);
-        var json = JsonCompatibleYamlSerializer.Serialize(yamlObject);
+        var manifest = YamlDeserializer.Deserialize<ToolManifest>(yaml);
+        return manifest ?? throw new InvalidOperationException($"Manifest '{manifestPath}' could not be parsed.");
+    }
 
-        var node = JsonNode.Parse(json)
-            ?? throw new InvalidOperationException($"Manifest '{manifestPath}' is empty.");
-
-        var evaluation = Schema.Evaluate(node, new EvaluationOptions { OutputFormat = OutputFormat.List });
-        if (!evaluation.IsValid)
+    private static void ValidateManifest(ToolManifest manifest, string manifestPath)
+    {
+        if (string.IsNullOrWhiteSpace(manifest.Id) || !ToolIdRegex.IsMatch(manifest.Id))
         {
-            var details = string.Join("; ", evaluation.Details.Select(d => d.ToString()));
-            throw new InvalidOperationException($"Manifest '{manifestPath}' failed schema validation: {details}");
+            throw new InvalidOperationException($"Manifest '{manifestPath}' has invalid id.");
         }
 
-        var manifest = JsonSerializer.Deserialize<ToolManifest>(node, ManifestJsonOptions)
-            ?? throw new InvalidOperationException($"Manifest '{manifestPath}' could not be parsed.");
+        if (string.IsNullOrWhiteSpace(manifest.Version) || !SemVerRegex.IsMatch(manifest.Version))
+        {
+            throw new InvalidOperationException($"Manifest '{manifestPath}' has invalid version.");
+        }
 
-        return manifest;
+        if (string.IsNullOrWhiteSpace(manifest.Summary))
+        {
+            throw new InvalidOperationException($"Manifest '{manifestPath}' has invalid summary.");
+        }
+
+        if (!new[] { "move", "add", "change", "delete", "read" }.Contains(manifest.Category, StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException($"Manifest '{manifestPath}' has invalid category.");
+        }
+
+        if (manifest.RiskTier is < 0 or > 3)
+        {
+            throw new InvalidOperationException($"Manifest '{manifestPath}' has invalid riskTier.");
+        }
+
+        if (manifest.MaxBlastRadius < 1)
+        {
+            throw new InvalidOperationException($"Manifest '{manifestPath}' has invalid maxBlastRadius.");
+        }
+
+        if (manifest.TimeoutSeconds < 1)
+        {
+            throw new InvalidOperationException($"Manifest '{manifestPath}' has invalid timeoutSeconds.");
+        }
+
+        if (manifest.Inputs.Count == 0)
+        {
+            throw new InvalidOperationException($"Manifest '{manifestPath}' must define at least one input.");
+        }
+
+        foreach (var (inputName, input) in manifest.Inputs)
+        {
+            if (string.IsNullOrWhiteSpace(inputName))
+            {
+                throw new InvalidOperationException($"Manifest '{manifestPath}' has an input with an empty name.");
+            }
+
+            if (!new[] { "string", "integer", "boolean", "number" }.Contains(input.Type, StringComparer.Ordinal))
+            {
+                throw new InvalidOperationException($"Manifest '{manifestPath}' input '{inputName}' has invalid type.");
+            }
+        }
     }
 
     private static bool IsGenericExecutionName(string toolId)
@@ -124,52 +167,4 @@ public sealed class ToolManifestCatalog : IToolManifestCatalog
                toolId.Contains("exec", StringComparison.OrdinalIgnoreCase) ||
                toolId.Contains("invoke-command", StringComparison.OrdinalIgnoreCase);
     }
-}
-
-internal static class ToolManifestSchema
-{
-    internal const string Json = """
-        {
-          "type": "object",
-          "required": ["id", "version", "summary", "category", "riskTier", "annotations", "inputs", "maxBlastRadius", "timeoutSeconds"],
-          "additionalProperties": false,
-          "properties": {
-            "id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
-            "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
-            "summary": { "type": "string", "minLength": 1 },
-            "category": { "type": "string", "enum": ["move", "add", "change", "delete", "read"] },
-            "riskTier": { "type": "integer", "minimum": 0, "maximum": 3 },
-            "telephonyModels": {
-              "type": "array",
-              "items": { "type": "string" }
-            },
-            "annotations": {
-              "type": "object",
-              "required": ["readOnlyHint", "destructiveHint", "idempotentHint"],
-              "additionalProperties": false,
-              "properties": {
-                "readOnlyHint": { "type": "boolean" },
-                "destructiveHint": { "type": "boolean" },
-                "idempotentHint": { "type": "boolean" }
-              }
-            },
-            "inputs": {
-              "type": "object",
-              "minProperties": 1,
-              "additionalProperties": {
-                "type": "object",
-                "required": ["type", "required"],
-                "additionalProperties": false,
-                "properties": {
-                  "type": { "type": "string", "enum": ["string", "integer", "boolean", "number"] },
-                  "format": { "type": "string" },
-                  "required": { "type": "boolean" }
-                }
-              }
-            },
-            "maxBlastRadius": { "type": "integer", "minimum": 1 },
-            "timeoutSeconds": { "type": "integer", "minimum": 1 }
-          }
-        }
-        """;
 }

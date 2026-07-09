@@ -8,7 +8,7 @@ public class ToolManifestCatalogTests
     [Fact]
     public void Catalog_LoadsMockWriteManifest_FromToolsFolder()
     {
-        var toolsRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "tools"));
+        var toolsRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "tools"));
         var catalog = new ToolManifestCatalog(toolsRoot, NullLogger<ToolManifestCatalog>.Instance);
 
         var manifest = catalog.GetRequired("mock-write-user-policy");
