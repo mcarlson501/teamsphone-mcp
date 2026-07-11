@@ -101,6 +101,19 @@ public sealed class ToolManifestCatalog : IToolManifestCatalog
     private static ToolManifest ParseManifest(string manifestPath)
     {
         var yaml = File.ReadAllText(manifestPath);
+
+        // C#'s `required` modifier is compile-time only: YamlDotNet builds ToolManifest via
+        // reflection, so an omitted `riskTier` key silently leaves the property at its CLR
+        // default, 0 - which is also the value that skips the whole dry-run/confirmation-token
+        // gate. That default is indistinguishable from an author explicitly writing
+        // riskTier: 0, so it needs a raw key-presence check rather than a value check.
+        var rawFields = YamlDeserializer.Deserialize<Dictionary<string, object?>>(yaml)
+            ?? new Dictionary<string, object?>();
+        if (!rawFields.ContainsKey("riskTier"))
+        {
+            throw new InvalidOperationException($"Manifest '{manifestPath}' is missing required field 'riskTier'.");
+        }
+
         var manifest = YamlDeserializer.Deserialize<ToolManifest>(yaml);
         return manifest ?? throw new InvalidOperationException($"Manifest '{manifestPath}' could not be parsed.");
     }
@@ -130,6 +143,11 @@ public sealed class ToolManifestCatalog : IToolManifestCatalog
         if (manifest.RiskTier is < 0 or > 3)
         {
             throw new InvalidOperationException($"Manifest '{manifestPath}' has invalid riskTier.");
+        }
+
+        if (manifest.Annotations is null)
+        {
+            throw new InvalidOperationException($"Manifest '{manifestPath}' is missing annotations.");
         }
 
         if (manifest.MaxBlastRadius < 1)

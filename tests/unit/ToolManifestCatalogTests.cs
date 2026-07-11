@@ -89,6 +89,75 @@ public class ToolManifestCatalogTests
     }
 
     [Fact]
+    public void Catalog_RejectsManifest_WhenRiskTierKeyIsMissing()
+    {
+        // riskTier: 0 is a valid, meaningful value (skips the dry-run/confirmation-token
+        // gate), so an omitted key must be rejected rather than silently defaulting to it.
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"manifest-tests-{Guid.NewGuid():N}");
+        var toolFolder = Path.Combine(tempRoot, "no-risk-tier-tool");
+        Directory.CreateDirectory(toolFolder);
+        File.WriteAllText(
+            Path.Combine(toolFolder, "manifest.yaml"),
+            """
+            id: no-risk-tier-tool
+            version: 1.0.0
+            summary: test
+            category: read
+            annotations:
+              readOnlyHint: true
+              destructiveHint: false
+              idempotentHint: true
+            inputs:
+              tenantId: { type: string, required: true }
+            maxBlastRadius: 1
+            timeoutSeconds: 30
+            """);
+
+        try
+        {
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => _ = new ToolManifestCatalog(tempRoot, NullLogger<ToolManifestCatalog>.Instance));
+            Assert.Contains("missing required field 'riskTier'", ex.Message);
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Catalog_RejectsManifest_WhenAnnotationsSectionIsMissing()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"manifest-tests-{Guid.NewGuid():N}");
+        var toolFolder = Path.Combine(tempRoot, "no-annotations-tool");
+        Directory.CreateDirectory(toolFolder);
+        File.WriteAllText(
+            Path.Combine(toolFolder, "manifest.yaml"),
+            """
+            id: no-annotations-tool
+            version: 1.0.0
+            summary: test
+            category: read
+            riskTier: 0
+            inputs:
+              tenantId: { type: string, required: true }
+            maxBlastRadius: 1
+            timeoutSeconds: 30
+            """);
+
+        try
+        {
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => _ = new ToolManifestCatalog(tempRoot, NullLogger<ToolManifestCatalog>.Instance));
+            Assert.Contains("missing annotations", ex.Message);
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Catalog_RejectsManifest_WhenInputTypeIsMissing()
     {
         var tempRoot = Path.Combine(Path.GetTempPath(), $"manifest-tests-{Guid.NewGuid():N}");
