@@ -1,0 +1,20 @@
+id: mock-write-user-policy
+version: 1.0.0
+summary: Mock write tool to demonstrate dry-run confirmation flow in M1
+category: change
+riskTier: 2
+telephonyModels: [callingPlans, operatorConnect]
+annotations:
+  readOnlyHint: false
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  targetUserUpn: { type: string, format: upn, required: true }
+  policyName: { type: string, required: true }
+  dryRun: { type: boolean, required: false }
+  whatIf: { type: boolean, required: false }
+  confirmationToken: { type: string, required: false }
+  blastRadius: { type: integer, required: false }
+maxBlastRadius: 1
+timeoutSeconds: 120

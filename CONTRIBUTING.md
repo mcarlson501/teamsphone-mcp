@@ -32,14 +32,15 @@ dotnet test  TeamsPhoneMcp.sln
 | `src/TeamsPhoneMcp.Core/`   | Tools and the central `AddTeamsPhoneTools` registration seam.  |
 | `tests/unit/`               | xUnit tests.                                                   |
 
-## Adding a tool (today)
+## Adding a tool (M1 kickoff state)
 
-For M0, tools are plain C# methods annotated with `[McpServerTool]` inside a
-`[McpServerToolType]` class under `src/TeamsPhoneMcp.Core/Tools/`, then registered in
-`ToolRegistration.AddTeamsPhoneTools`. See `Tools/PingTool.cs` as the template.
+Tool onboarding now starts with a manifest in `tools/<name>/manifest.yaml`.
+The host validates manifests at startup with the M1 schema and loads them into a
+catalog used by the policy engine and tool handlers.
 
-> A manifest-driven registry (`tools/<name>/manifest.yaml` + `run.ps1` + tests) is
-> introduced in milestone M1; this section will be replaced then.
+For now, execution is still C# tool handlers in `src/TeamsPhoneMcp.Core/Tools/`
+(`ping` + `mock-write-user-policy`). Use `tools/_template/` as the starting point
+for new manifest folders until PowerShell stage execution lands in M2.
 
 ## Definition of done (every PR)
 

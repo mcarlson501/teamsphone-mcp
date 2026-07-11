@@ -12,4 +12,10 @@
     <InternalsVisibleTo Include="TeamsPhoneMcp.UnitTests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\..\tools\**\manifest.yaml" CopyToPublishDirectory="PreserveNewest">
+      <Link>tools\%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+
 </Project>
