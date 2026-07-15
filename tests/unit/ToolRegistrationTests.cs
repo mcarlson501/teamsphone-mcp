@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 using TeamsPhoneMcp.Core;
+using TeamsPhoneMcp.Core.Execution;
 using TeamsPhoneMcp.Core.Manifests;
 using TeamsPhoneMcp.Core.Policy;
 using TeamsPhoneMcp.Core.Sessions;
@@ -213,6 +214,63 @@ public class ToolRegistrationTests
 
         Assert.Contains("TEAMSPHONE_MCP_CONFIRMATION_TOKEN_KEY", ex.Message);
         Assert.Contains("CreateRandomBase64Key", ex.Message);
+    }
+
+    [Fact]
+    public async Task AddTeamsPhoneTools_RegistersPipelineRunnerWithFailClosedStageExecutor()
+    {
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
+        builder.Services.AddMcpServer().AddTeamsPhoneTools();
+
+        using var host = builder.Build();
+        await host.StartAsync();
+
+        Assert.NotNull(host.Services.GetRequiredService<IToolPipelineRunner>());
+        var executor = host.Services.GetRequiredService<IStageExecutor>();
+        var request = new StageExecutionRequest(
+            new StubSession(),
+            SampleManifest(),
+            ToolStage.Execute,
+            "{}",
+            Guid.NewGuid().ToString());
+
+        await Assert.ThrowsAsync<TenantSessionException>(() =>
+            executor.ExecuteAsync(request, CancellationToken.None));
+
+        await host.StopAsync();
+    }
+
+    [Fact]
+    public void AddTeamsPhoneTools_PreservesRegisteredStageExecutor()
+    {
+        var executor = new FakeStageExecutor();
+        var services = new ServiceCollection();
+        services.AddSingleton<IStageExecutor>(executor);
+        services.AddMcpServer().AddTeamsPhoneTools();
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Same(executor, provider.GetRequiredService<IStageExecutor>());
+    }
+
+    private static ToolManifest SampleManifest() => new()
+    {
+        Id = "sample-tool",
+        Version = "1.0.0",
+        Summary = "Sample.",
+        Category = "read",
+        RiskTier = 0,
+        Annotations = new ToolManifestAnnotations(),
+        Inputs = new Dictionary<string, ToolManifestInput>()
+    };
+
+    private sealed class StubSession : ITenantExecutionSession
+    {
+        public TenantSessionContext Context { get; } = new(
+            Guid.Parse("00000000-0000-0000-0000-000000000001"),
+            "test-credential");
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     private static string CopyBuiltManifestCatalog()
