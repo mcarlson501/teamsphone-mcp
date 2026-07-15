@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using System.Reflection;
 using TeamsPhoneMcp.Core.Manifests;
 using TeamsPhoneMcp.Core.Policy;
 using ModelContextProtocol.Server;
@@ -10,14 +11,13 @@ using TeamsPhoneMcp.Core.Tools;
 namespace TeamsPhoneMcp.Core;
 
 /// <summary>
-/// Central tool-registration seam. M1 kickoff keeps registration centralized while
-/// introducing the manifest catalog + policy services used by tool handlers.
+/// Central registration for manifest-validated tools and their policy services.
 /// </summary>
 public static class ToolRegistration
 {
     /// <summary>
     /// Registers every tool this server exposes onto the supplied MCP server builder.
-    /// Registers currently available tools plus milestone-1 policy/manifest services.
+    /// Registers the current tools plus policy and manifest services.
     /// </summary>
     public static IMcpServerBuilder AddTeamsPhoneTools(this IMcpServerBuilder builder)
     {
@@ -60,14 +60,38 @@ public static class ToolRegistration
             var logger = sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ToolManifestCatalog>>();
             var configuredPath = configuration?["ToolManifests:ToolsRootPath"];
             var toolsPath = string.IsNullOrWhiteSpace(configuredPath)
-                ? Path.Combine(env.ContentRootPath, "tools")
-                : configuredPath;
+                ? Path.Combine(AppContext.BaseDirectory, "tools")
+                : Path.GetFullPath(configuredPath, env.ContentRootPath);
             return new ToolManifestCatalog(toolsPath, logger);
         });
+        builder.Services.AddHostedService<ManifestCatalogStartupValidator>();
 
-        builder.WithTools<PingTool>();
-        builder.WithTools<MockWriteTool>();
+        builder.WithTools(
+        [
+            CreateManifestValidatedTool<PingTool>(nameof(PingTool.Ping)),
+            CreateManifestValidatedTool<MockWriteTool>(nameof(MockWriteTool.MockWriteUserPolicy))
+        ]);
 
         return builder;
+    }
+
+    private static McpServerTool CreateManifestValidatedTool<TTool>(string methodName)
+    {
+        var method = typeof(TTool).GetMethod(
+            methodName,
+            BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+            ?? throw new InvalidOperationException(
+                $"Could not find MCP tool method '{typeof(TTool).FullName}.{methodName}'.");
+
+        var innerTool = method.IsStatic
+            ? McpServerTool.Create(method, target: null)
+            : McpServerTool.Create(
+                method,
+                request => ActivatorUtilities.CreateInstance(
+                    request.Services
+                        ?? throw new InvalidOperationException("The MCP tool request does not provide a service provider."),
+                    typeof(TTool)));
+
+        return new ManifestValidatingMcpServerTool(innerTool);
     }
 }

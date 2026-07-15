@@ -9,6 +9,11 @@ public sealed class WritePolicyEngine(IConfirmationTokenService tokenService)
     {
         ArgumentNullException.ThrowIfNull(manifest);
 
+        if (manifest.RiskTier == 0)
+        {
+            return PolicyDecision.Execute();
+        }
+
         var effectiveDryRun = ResolveDryRunFlag(request.DryRun, request.WhatIf);
         if (effectiveDryRun is null)
         {
@@ -28,11 +33,6 @@ public sealed class WritePolicyEngine(IConfirmationTokenService tokenService)
         if (manifest.RiskTier >= 3 && !request.AllowTier3)
         {
             return PolicyDecision.Reject("tier3NotAllowed", "allowTier3 must be true for tier-3 tools.");
-        }
-
-        if (manifest.RiskTier == 0)
-        {
-            return PolicyDecision.Execute();
         }
 
         if (request.SessionWhatIfMode)
