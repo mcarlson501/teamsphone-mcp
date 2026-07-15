@@ -104,18 +104,16 @@ public sealed class RunspaceStageExecutor : IStageExecutor
         cancellationToken.ThrowIfCancellationRequested();
 
         var asyncResult = powerShell.BeginInvoke();
-        await using (cancellationToken.Register(static state => ((PowerShell)state!).Stop(), powerShell).ConfigureAwait(false))
+        using var registration = cancellationToken.Register(static state => ((PowerShell)state!).Stop(), powerShell);
+        try
         {
-            try
-            {
-                return await Task.Factory
-                    .FromAsync(asyncResult, powerShell.EndInvoke)
-                    .ConfigureAwait(false);
-            }
-            catch (PipelineStoppedException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw new OperationCanceledException(cancellationToken);
-            }
+            return await Task.Factory
+                .FromAsync(asyncResult, powerShell.EndInvoke)
+                .ConfigureAwait(false);
+        }
+        catch (PipelineStoppedException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(cancellationToken);
         }
     }
 
