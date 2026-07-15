@@ -41,11 +41,8 @@ public sealed record StageExecutionResult
 
     public string? SanitizedMessage { get; }
 
-public static StageExecutionResult Success(JsonElement? output)
-{
-    var detached = output.HasValue ? output.Value.Clone() : (JsonElement?)null;
-    return new StageExecutionResult(true, detached, null, null);
-}
+    public static StageExecutionResult Success(JsonElement? output) =>
+        new(true, output?.Clone(), null, null);
 
     public static StageExecutionResult Failure(string errorCode, string sanitizedMessage)
     {

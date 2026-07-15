@@ -283,32 +283,28 @@ public sealed class ToolPipelineRunner : IToolPipelineRunner
 
         var stageRequest = new StageExecutionRequest(session, request.Manifest, stage, inputJson, request.CorrelationId);
 
-try
-{
-    return await _stageExecutor.ExecuteAsync(stageRequest, timeoutCts.Token);
-}
-catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
-{
-    _logger.LogWarning(
-        "Tool stage {Stage} for {ToolId} exceeded its {TimeoutSeconds}s time limit.",
-        stage,
-        request.Manifest.Id,
-        request.Manifest.TimeoutSeconds);
-    return StageExecutionResult.Failure(StageErrorCodes.TimeoutExceeded, $"Stage '{stage}' exceeded its time limit.");
-}
-catch (TenantSessionFatalException)
-{
-    throw;
-}
-catch (TenantSessionException)
-{
-    throw;
-}
-catch (Exception ex)
-{
-    _logger.LogError(ex, "Tool stage {Stage} for {ToolId} failed unexpectedly.", stage, request.Manifest.Id);
-    return StageExecutionResult.Failure(StageErrorCodes.ExecutionFailed, $"Stage '{stage}' failed.");
-}
+        try
+        {
+            return await _stageExecutor.ExecuteAsync(stageRequest, timeoutCts.Token);
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning(
+                "Tool stage {Stage} for {ToolId} exceeded its {TimeoutSeconds}s time limit.",
+                stage,
+                request.Manifest.Id,
+                request.Manifest.TimeoutSeconds);
+            return StageExecutionResult.Failure(StageErrorCodes.TimeoutExceeded, $"Stage '{stage}' exceeded its time limit.");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException and not TenantSessionException and not TenantSessionFatalException)
+        {
+            _logger.LogError(
+                ex,
+                "Unexpected error in tool stage {Stage} for {ToolId}.",
+                stage,
+                request.Manifest.Id);
+            return StageExecutionResult.Failure(StageErrorCodes.ExecutionFailed, $"Stage '{stage}' encountered an unexpected error.");
+        }
         finally
         {
             stopwatch.Stop();

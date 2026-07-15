@@ -81,7 +81,7 @@ public static class ToolRegistration
             services => services.GetRequiredService<TenantSessionManager>());
         builder.Services.AddHostedService<TenantSessionCleanupService>();
         builder.Services.TryAddSingleton<IStageExecutor, UnconfiguredStageExecutor>();
-builder.Services.TryAddSingleton<IToolPipelineRunner, ToolPipelineRunner>();
+        builder.Services.TryAddSingleton<IToolPipelineRunner, ToolPipelineRunner>();
 
         builder.WithTools(
         [
