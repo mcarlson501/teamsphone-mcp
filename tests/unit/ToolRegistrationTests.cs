@@ -249,7 +249,6 @@ public class ToolRegistrationTests
         services.AddMcpServer().AddTeamsPhoneTools();
 
         using var provider = services.BuildServiceProvider();
-
         Assert.Same(executor, provider.GetRequiredService<IStageExecutor>());
     }
 

@@ -296,6 +296,15 @@ public sealed class ToolPipelineRunner : IToolPipelineRunner
                 request.Manifest.TimeoutSeconds);
             return StageExecutionResult.Failure(StageErrorCodes.TimeoutExceeded, $"Stage '{stage}' exceeded its time limit.");
         }
+        catch (Exception ex) when (ex is not OperationCanceledException and not TenantSessionException and not TenantSessionFatalException)
+        {
+            _logger.LogError(
+                ex,
+                "Unexpected error in tool stage {Stage} for {ToolId}.",
+                stage,
+                request.Manifest.Id);
+            return StageExecutionResult.Failure(StageErrorCodes.ExecutionFailed, $"Stage '{stage}' encountered an unexpected error.");
+        }
         finally
         {
             stopwatch.Stop();
