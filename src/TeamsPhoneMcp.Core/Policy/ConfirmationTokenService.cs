@@ -29,7 +29,12 @@ public sealed class ConfirmationTokenService : IConfirmationTokenService
             throw new ArgumentException("Confirmation token key must be at least 32 bytes.", nameof(key));
         }
 
-        _key = key;
+        if (ttl <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(ttl), "Confirmation token TTL must be positive.");
+        }
+
+        _key = key.ToArray();
         _ttl = ttl;
     }
 
@@ -96,7 +101,16 @@ public sealed class ConfirmationTokenService : IConfirmationTokenService
             return ConfirmationTokenValidation.Fail("invalidConfirmationToken");
         }
 
-        var payload = JsonSerializer.Deserialize<ConfirmationTokenPayload>(payloadBytes);
+        ConfirmationTokenPayload? payload;
+        try
+        {
+            payload = JsonSerializer.Deserialize<ConfirmationTokenPayload>(payloadBytes);
+        }
+        catch (JsonException)
+        {
+            return ConfirmationTokenValidation.Fail("invalidConfirmationToken");
+        }
+
         if (payload is null)
         {
             return ConfirmationTokenValidation.Fail("invalidConfirmationToken");
@@ -108,7 +122,7 @@ public sealed class ConfirmationTokenService : IConfirmationTokenService
             return ConfirmationTokenValidation.Fail("invalidConfirmationToken");
         }
 
-        if (payload.ExpiresAtUnixSeconds < nowUtc.ToUnixTimeSeconds())
+        if (payload.ExpiresAtUnixSeconds <= nowUtc.ToUnixTimeSeconds())
         {
             return ConfirmationTokenValidation.Fail("expiredConfirmationToken");
         }

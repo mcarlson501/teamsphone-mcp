@@ -6,7 +6,7 @@ using TeamsPhoneMcp.Host.Logging;
 namespace TeamsPhoneMcp.Host;
 
 /// <summary>
-/// Entry point for the teamsphone-mcp host (M0 skeleton).
+/// Entry point for the teamsphone-mcp host.
 /// Supports two transports:
 ///   • Streamable HTTP at <c>/mcp</c> (primary; bearer-token protected)
 ///   • stdio for local single-tenant use (selected with <c>--stdio</c> or

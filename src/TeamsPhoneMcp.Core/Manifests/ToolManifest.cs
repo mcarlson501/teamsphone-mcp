@@ -25,10 +25,7 @@ public sealed record ToolManifest
     public int TimeoutSeconds { get; init; }
 }
 
-/// <summary>
-/// Declarative input schema for a manifest. Not yet enforced against tool call
-/// arguments at runtime; enforcement lands with PowerShell stage execution in M2.
-/// </summary>
+/// <summary>Declarative input schema enforced before MCP tool argument binding.</summary>
 public sealed record ToolManifestInput
 {
     [JsonPropertyName("type")]

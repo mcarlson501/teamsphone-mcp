@@ -6,6 +6,9 @@
 # dotenv files
 .env
 
+# Local Microsoft developer tooling state
+Library/Application Support/Microsoft/DeveloperTools/
+
 # User-specific files
 *.rsuser
 *.suo

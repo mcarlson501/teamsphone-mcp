@@ -21,7 +21,13 @@ security is treated as acceptance-blocking, not optional:
   configuration/environment only; they are never hardcoded and never logged. Do not
   commit secrets, tenant names, or real phone numbers in code, tests, or fixtures.
 - **No generic execution tool.** Every write is an enumerated, single-purpose,
-  schema-validated tool. There is no "run arbitrary script/command" capability.
+  schema-validated tool. Raw arguments are checked before handler binding, and the
+  host fails startup if its strict manifest and exposed tool contracts drift. There
+  is no "run arbitrary script/command" capability.
+- **Writes require two steps.** Write tools default to dry-run. Execution requires a
+  short-lived HMAC confirmation token bound to the tool, tenant, and canonical
+  business parameters; changed parameters, expired tokens, and cross-context token
+  use are rejected.
 - **Tenant isolation.** Execution context is never reused across tenants (enforced in
   later milestones as the PowerShell session layer lands).
 

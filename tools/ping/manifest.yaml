@@ -1,0 +1,14 @@
+id: ping
+version: 1.0.0
+summary: Verify that the MCP server is reachable and responsive
+category: read
+riskTier: 0
+telephonyModels: []
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  message: {type: string, required: false}
+maxBlastRadius: 0
+timeoutSeconds: 5

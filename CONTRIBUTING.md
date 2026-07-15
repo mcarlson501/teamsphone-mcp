@@ -1,8 +1,7 @@
 # Contributing to teamsphone-mcp
 
-Thanks for your interest in contributing! This document is intentionally brief for
-the M0 skeleton and will grow as the tool contract and PowerShell surface land in
-later milestones.
+Thanks for your interest in contributing. The current surface is the M1 manifest,
+C# tool, and policy boundary; PowerShell execution lands in M2.
 
 ## Ground rules (from the build spec)
 
@@ -32,18 +31,27 @@ dotnet test  TeamsPhoneMcp.sln
 | `src/TeamsPhoneMcp.Core/`   | Tools and the central `AddTeamsPhoneTools` registration seam.  |
 | `tests/unit/`               | xUnit tests.                                                   |
 
-## Adding a tool (M1 kickoff state)
+## Adding a tool
 
-Tool onboarding now starts with a manifest in `tools/<name>/manifest.yaml`.
-The host validates manifests at startup with the M1 schema and loads them into a
-catalog used by the policy engine and tool handlers.
+1. Copy `tools/_template/` to `tools/<tool-id>/` and set a kebab-case `id` that
+  exactly matches the folder name.
+2. Define every input explicitly. Supported M1 types are `string`, `integer`,
+  `number`, and `boolean`; the supported format is `upn`.
+3. Add the C# handler under `src/TeamsPhoneMcp.Core/Tools/` and register it in
+  `AddTeamsPhoneTools`.
+4. Keep the manifest inputs, required fields, and annotations exactly aligned with
+  the generated MCP contract.
+5. Add catalog, validation, policy, and host acceptance coverage appropriate to the
+  tool's risk tier.
 
-For now, execution is still C# tool handlers in `src/TeamsPhoneMcp.Core/Tools/`
-(`ping` + `mock-write-user-policy`). Use `tools/_template/` as the starting point
-for new manifest folders until PowerShell stage execution lands in M2.
+The host rejects unknown manifest fields and fails startup for missing, orphaned, or
+mismatched tool contracts. At invocation, raw arguments are validated before C#
+binding. Do not add a manifest without a handler or expose a handler without a
+manifest.
 
 ## Definition of done (every PR)
 
-- Tests included and green.
+- Manifest and C# schema/annotations remain in parity.
+- Tests included and green, including malformed and rejection paths.
 - No secrets, tenant names, or real numbers anywhere.
 - Docs updated when contracts or setup change.
