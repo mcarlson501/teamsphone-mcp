@@ -62,11 +62,7 @@ public static class ToolRegistration
             var env = sp.GetRequiredService<IHostEnvironment>();
             var configuration = sp.GetService<IConfiguration>();
             var logger = sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ToolManifestCatalog>>();
-            var configuredPath = configuration?["ToolManifests:ToolsRootPath"];
-            var toolsPath = string.IsNullOrWhiteSpace(configuredPath)
-                ? Path.Combine(AppContext.BaseDirectory, "tools")
-                : Path.GetFullPath(configuredPath, env.ContentRootPath);
-            return new ToolManifestCatalog(toolsPath, logger);
+            return new ToolManifestCatalog(ResolveToolsRootPath(env, configuration), logger);
         });
         builder.Services.AddHostedService<ManifestCatalogStartupValidator>();
         builder.Services
@@ -90,6 +86,37 @@ public static class ToolRegistration
         ]);
 
         return builder;
+    }
+
+    /// <summary>
+    /// Opt-in replacement of the fail-closed <see cref="UnconfiguredStageExecutor"/>
+    /// with the in-process PowerShell <see cref="RunspaceStageExecutor"/>. Kept
+    /// separate so the default posture stays fail-closed; a real tenant session
+    /// factory (which supplies the connected runspace) is still required before
+    /// any stage can run.
+    /// </summary>
+    public static IMcpServerBuilder AddPowerShellStageExecution(this IMcpServerBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Services.TryAddSingleton(sp =>
+        {
+            var env = sp.GetRequiredService<IHostEnvironment>();
+            var configuration = sp.GetService<IConfiguration>();
+            return new ToolScriptLocator(ResolveToolsRootPath(env, configuration));
+        });
+        builder.Services.RemoveAll<IStageExecutor>();
+        builder.Services.AddSingleton<IStageExecutor, RunspaceStageExecutor>();
+
+        return builder;
+    }
+
+    private static string ResolveToolsRootPath(IHostEnvironment env, IConfiguration? configuration)
+    {
+        var configuredPath = configuration?["ToolManifests:ToolsRootPath"];
+        return string.IsNullOrWhiteSpace(configuredPath)
+            ? Path.Combine(AppContext.BaseDirectory, "tools")
+            : Path.GetFullPath(configuredPath, env.ContentRootPath);
     }
 
     private static McpServerTool CreateManifestValidatedTool<TTool>(string methodName)

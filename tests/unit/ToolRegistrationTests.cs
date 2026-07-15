@@ -249,8 +249,22 @@ public class ToolRegistrationTests
         services.AddMcpServer().AddTeamsPhoneTools();
 
         using var provider = services.BuildServiceProvider();
-
         Assert.Same(executor, provider.GetRequiredService<IStageExecutor>());
+    }
+
+    [Fact]
+    public async Task AddPowerShellStageExecution_ReplacesDefaultWithRunspaceExecutor()
+    {
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
+        builder.Services.AddMcpServer().AddTeamsPhoneTools().AddPowerShellStageExecution();
+
+        using var host = builder.Build();
+        await host.StartAsync();
+
+        Assert.IsType<RunspaceStageExecutor>(host.Services.GetRequiredService<IStageExecutor>());
+        Assert.NotNull(host.Services.GetRequiredService<ToolScriptLocator>());
+
+        await host.StopAsync();
     }
 
     private static ToolManifest SampleManifest() => new()
