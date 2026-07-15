@@ -1,10 +1,13 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.Reflection;
 using TeamsPhoneMcp.Core.Manifests;
 using TeamsPhoneMcp.Core.Policy;
+using TeamsPhoneMcp.Core.Sessions;
 using ModelContextProtocol.Server;
 using TeamsPhoneMcp.Core.Tools;
 
@@ -65,6 +68,17 @@ public static class ToolRegistration
             return new ToolManifestCatalog(toolsPath, logger);
         });
         builder.Services.AddHostedService<ManifestCatalogStartupValidator>();
+        builder.Services
+            .AddOptions<TenantSessionOptions>()
+            .BindConfiguration(TenantSessionOptions.SectionName)
+            .ValidateOnStart();
+        builder.Services.AddSingleton<IValidateOptions<TenantSessionOptions>, TenantSessionOptionsValidator>();
+        builder.Services.TryAddSingleton<TimeProvider>(TimeProvider.System);
+        builder.Services.TryAddSingleton<ITenantSessionFactory, UnconfiguredTenantSessionFactory>();
+        builder.Services.AddSingleton<TenantSessionManager>();
+        builder.Services.AddSingleton<ITenantSessionManager>(
+            services => services.GetRequiredService<TenantSessionManager>());
+        builder.Services.AddHostedService<TenantSessionCleanupService>();
 
         builder.WithTools(
         [
