@@ -1,7 +1,13 @@
 # Contributing to teamsphone-mcp
 
-Thanks for your interest in contributing. The current surface is the M1 manifest,
-C# tool, and policy boundary; PowerShell execution lands in M2.
+Thanks for your interest in contributing. This is a pre-release project under active
+development. Public APIs and manifest contracts may change before the first release,
+and the repository is not ready for production or live-tenant use.
+
+The current surface is the M1 manifest, C# tool, and policy boundary. M2 work begins
+with tenant-session isolation and execution contracts before PowerShell or live
+Microsoft 365 integration. Open an issue before starting a broad architectural change
+so the work can be aligned with the milestone plan.
 
 ## Ground rules (from the build spec)
 
@@ -9,6 +15,8 @@ C# tool, and policy boundary; PowerShell execution lands in M2.
   does the work. There is **no** generic "run anything" tool, and none will be added.
 - **Security is acceptance-blocking.** Client-facing auth exists from day one. Never
   commit secrets, tenant names, or real phone numbers in code, tests, or fixtures.
+- **Use synthetic data only.** Tests, examples, issue reports, and pull requests must
+  not include customer identifiers or data copied from a live tenant.
 - **Small PRs.** Each milestone has acceptance criteria a human verifies before the
   next begins. Keep changes focused.
 
