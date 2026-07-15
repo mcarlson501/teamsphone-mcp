@@ -344,7 +344,7 @@ Work in small PRs; each milestone has acceptance criteria the human verifies bef
 **M0 — Skeleton (host + transport + one fake tool)**
 Scaffold solution, MCP C# SDK wired, stdio + Streamable HTTP, bearer auth middleware, `ping` tool. ✅ MCP Inspector connects over both transports; unauthenticated HTTP rejected.
 
-**M1 — Tool registry + policy engine (no PowerShell yet; implementation and automated acceptance complete, CI/manual acceptance pending)**
+**M1 — Tool registry + policy engine (no PowerShell yet; complete)**
 Manifest loader → JSON Schema → MCP tool registration with annotations; dry-run/confirmation-token flow; tier gating; blast-radius checks; `_template` folder. ✅ Unit tests green; a mock write tool demonstrates the full two-step token flow through Inspector.
 
 **M2 — PowerShell execution engine + tenant sessions**

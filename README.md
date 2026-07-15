@@ -8,9 +8,9 @@ baked-in credentials. Tenant identity and credentials are supplied per session/c
 See [`teamsphone-mcp-build-spec`](./teamsphone-mcp-build-spec) for the full project
 specification and roadmap.
 
-> **Status: Milestone M1 acceptance.** M1 implementation and automated acceptance
-> are complete. The first GitHub Actions run and the manual HTTP/stdio MCP Inspector
-> checks remain before M1 is closed. PowerShell execution begins in M2.
+> **Status: Milestone M1 complete.** Strict manifests, raw-call validation,
+> host-enforced write policy, Release CI, and MCP Inspector acceptance over HTTP and
+> stdio are complete. PowerShell execution begins in M2.
 
 ## Layout
 
