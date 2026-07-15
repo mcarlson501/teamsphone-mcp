@@ -23,9 +23,9 @@ internal sealed class TenantSessionCleanupService(
             {
                 break;
             }
-            catch
+            catch (Exception ex)
             {
-                logger.LogError("Tenant session idle cleanup failed.");
+                logger.LogError(ex, "Tenant session idle cleanup failed.");
             }
         }
     }

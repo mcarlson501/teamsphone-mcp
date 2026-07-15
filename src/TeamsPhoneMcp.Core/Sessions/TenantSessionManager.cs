@@ -362,9 +362,10 @@ public sealed class TenantSessionManager : ITenantSessionManager, IAsyncDisposab
         {
             await session.DisposeAsync();
         }
-        catch
+        catch (Exception ex)
         {
             _logger.LogWarning(
+                ex,
                 "Failed to dispose tenant session for tenant {TenantId}.",
                 entry.Context.TenantId);
         }
