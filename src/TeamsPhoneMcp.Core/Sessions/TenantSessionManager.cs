@@ -295,6 +295,7 @@ public sealed class TenantSessionManager : ITenantSessionManager, IAsyncDisposab
     private async Task ReleaseLeaseAsync(SessionEntry entry)
     {
         var shouldDispose = false;
+        TaskCompletionSource? drained = null;
 
         await _gate.WaitAsync();
         try
@@ -309,7 +310,7 @@ public sealed class TenantSessionManager : ITenantSessionManager, IAsyncDisposab
             {
                 entry.LastUsedUtc = _timeProvider.GetUtcNow();
                 entry.LastAccessOrder = ++_accessOrder;
-                entry.Drained.TrySetResult();
+                drained = entry.Drained;
 
                 if (entry.Invalidated &&
                     _sessions.TryGetValue(entry.Context.TenantId, out var current) &&
@@ -324,6 +325,12 @@ public sealed class TenantSessionManager : ITenantSessionManager, IAsyncDisposab
         {
             _gate.Release();
         }
+
+        // Signal drain completion only after releasing the gate. DisposeAsync keys
+        // its teardown — including disposing this semaphore — off the drained signal,
+        // so signaling while still holding/releasing the gate races the semaphore's
+        // disposal and can surface as ObjectDisposedException on _gate.Release().
+        drained?.TrySetResult();
 
         if (shouldDispose)
         {
