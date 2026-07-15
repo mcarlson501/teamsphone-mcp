@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Reflection;
+using TeamsPhoneMcp.Core.Execution;
 using TeamsPhoneMcp.Core.Manifests;
 using TeamsPhoneMcp.Core.Policy;
 using TeamsPhoneMcp.Core.Sessions;
@@ -79,6 +80,8 @@ public static class ToolRegistration
         builder.Services.AddSingleton<ITenantSessionManager>(
             services => services.GetRequiredService<TenantSessionManager>());
         builder.Services.AddHostedService<TenantSessionCleanupService>();
+        builder.Services.TryAddSingleton<IStageExecutor, UnconfiguredStageExecutor>();
+        builder.Services.AddSingleton<IToolPipelineRunner, ToolPipelineRunner>();
 
         builder.WithTools(
         [
