@@ -1,16 +1,48 @@
 # teamsphone-mcp
 
-An open-source **MCP server** that exposes Microsoft Teams Phone administration
-operations (MACD — Move / Add / Change / Delete — plus read/diagnostic tools) as
-MCP tools. It is **tenant-agnostic**: it contains zero customer data and zero
-baked-in credentials. Tenant identity and credentials are supplied per session/call.
+[![CI](https://github.com/mcarlson501/teamsphone-mcp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mcarlson501/teamsphone-mcp/actions/workflows/ci.yml)
 
-See [`teamsphone-mcp-build-spec`](./teamsphone-mcp-build-spec) for the full project
-specification and roadmap.
+> [!WARNING]
+> **Experimental and not ready for production use.** Do not connect this project to
+> a live Microsoft 365 tenant or rely on it to make real Teams Phone changes. The
+> current M1 implementation exposes only diagnostic and mock tools; Microsoft Teams,
+> Microsoft Graph, credentials, and PowerShell execution are not implemented yet.
 
-> **Status: Milestone M1 complete.** Strict manifests, raw-call validation,
-> host-enforced write policy, Release CI, and MCP Inspector acceptance over HTTP and
-> stdio are complete. PowerShell execution begins in M2.
+`teamsphone-mcp` is an experimental, open-source **Model Context Protocol (MCP)
+server** for building safe, deterministic Microsoft Teams Phone administration
+tools. The long-term goal is to expose enumerated Move / Add / Change / Delete
+(MACD), read, and diagnostic operations without providing arbitrary command
+execution.
+
+The repository is tenant-agnostic and contains no customer data or baked-in
+credentials. The current code does not accept tenant credentials or connect to
+Microsoft 365.
+
+> **Project status:** Milestone M1 is complete and M2 is next. Interfaces, manifests,
+> and configuration may change without backward compatibility before the first
+> release.
+
+## What works today
+
+- Streamable HTTP and stdio MCP transports.
+- Fail-closed bearer authentication for HTTP and correlation-aware request logging.
+- Strict YAML manifests with startup schema and annotation parity checks.
+- Raw tool-argument validation before C# binding.
+- Risk tiers, blast-radius checks, dry-run defaults, and HMAC confirmation tokens.
+- A read-only `ping` tool and `mock-write-user-policy` safety-flow demonstration.
+- Release build and test coverage in GitHub Actions.
+
+## Not implemented yet
+
+- Connections to Microsoft Teams, Microsoft Graph, or any Microsoft 365 tenant.
+- Credential providers, certificate authentication, or secret storage.
+- PowerShell runspaces, tenant sessions, session isolation, or real telephony tools.
+- Audit storage, the full staged execution pipeline, container packaging, or a
+   supported release artifact.
+
+See [`teamsphone-mcp-build-spec`](./teamsphone-mcp-build-spec) for the milestone
+roadmap. Issues and focused contributions are welcome; review
+[`CONTRIBUTING.md`](./CONTRIBUTING.md) before proposing implementation work.
 
 ## Layout
 
@@ -34,7 +66,10 @@ dotnet build TeamsPhoneMcp.sln
 dotnet test  TeamsPhoneMcp.sln
 ```
 
-## Running the server
+## Development quickstart
+
+These commands run the M1 development harness. They do not connect to Microsoft 365
+or perform real Teams Phone administration.
 
 The host selects its transport from the command line / environment:
 
@@ -117,11 +152,12 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:5199/mcp \
 # → 401
 ```
 
-## M2 boundary
+## Next milestone
 
 M1 intentionally keeps C# handlers as the invocation source. Dynamic PowerShell
 dispatch, runspaces, credentials, tenant isolation, audit storage, server mode
-ceilings, Docker packaging, and real Teams tools remain M2 or later work.
+ceilings, Docker packaging, and real Teams tools remain M2 or later work. M2 starts
+with tenant-session isolation and execution contracts before any live integration.
 
 ## License
 

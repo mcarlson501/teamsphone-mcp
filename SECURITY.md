@@ -8,10 +8,22 @@ feature for this repository. Do **not** open a public issue for security reports
 
 We aim to acknowledge reports within a few business days.
 
+## Development status
+
+This project is pre-release, under active development, and not approved for
+production or live-tenant use. There are no production-supported versions or security
+service-level commitments. The current M1 implementation does not connect to
+Microsoft Teams, Microsoft Graph, or Microsoft 365 and does not accept tenant
+credentials.
+
+The controls below describe the implemented host and policy boundary. Credential
+handling, PowerShell execution, tenant sessions, and tenant isolation are M2 work and
+must pass their milestone security tests before any live integration is considered.
+
 ## Security model (summary)
 
-This server administers Microsoft Teams Phone against customer M365 tenants, so
-security is treated as acceptance-blocking, not optional:
+This project is intended to administer Microsoft Teams Phone against customer M365
+tenants, so security is treated as acceptance-blocking, not optional:
 
 - **Client-facing auth from day one.** The HTTP transport requires a static bearer
   token supplied via configuration/environment (`TEAMSPHONE_MCP_BEARER_TOKEN`).
@@ -28,10 +40,11 @@ security is treated as acceptance-blocking, not optional:
   short-lived HMAC confirmation token bound to the tool, tenant, and canonical
   business parameters; changed parameters, expired tokens, and cross-context token
   use are rejected.
-- **Tenant isolation.** Execution context is never reused across tenants (enforced in
-  later milestones as the PowerShell session layer lands).
+- **Tenant isolation is not implemented yet.** M2 must make tenant identity immutable
+  on each session and prove through isolation tests that no execution context crosses
+  tenants. Until that boundary exists, this project must not connect to live tenants.
 
 ## Supported versions
 
-The project is pre-1.0 and under active milestone development; only the latest
-`main` is supported.
+No production version is currently supported. Security fixes for the development
+codebase are made on the latest `main` branch.
