@@ -1,7 +1,9 @@
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Nito.AsyncEx;
 using TeamsPhoneMcp.Core.Sessions;
 
 namespace TeamsPhoneMcp.Core.Execution;
@@ -19,6 +21,7 @@ public sealed class RunspaceStageExecutor : IStageExecutor
 {
     private readonly ToolScriptLocator _scriptLocator;
     private readonly ILogger<RunspaceStageExecutor> _logger;
+    private readonly ConditionalWeakTable<Runspace, AsyncLock> _runspaceExecutionGates = new();
 
     public RunspaceStageExecutor(ToolScriptLocator scriptLocator, ILogger<RunspaceStageExecutor> logger)
     {
@@ -67,7 +70,11 @@ public sealed class RunspaceStageExecutor : IStageExecutor
         PSDataCollection<PSObject> output;
         try
         {
-            output = await InvokeAsync(powerShell, cancellationToken).ConfigureAwait(false);
+            var gate = _runspaceExecutionGates.GetValue(session.Runspace, static _ => new AsyncLock());
+            using (await gate.LockAsync(cancellationToken).ConfigureAwait(false))
+            {
+                output = await InvokeAsync(powerShell, cancellationToken).ConfigureAwait(false);
+            }
         }
         catch (OperationCanceledException)
         {
