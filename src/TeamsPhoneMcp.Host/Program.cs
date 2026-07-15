@@ -43,7 +43,9 @@ public class Program
         builder.Services
             .AddMcpServer()
             .WithStdioServerTransport()
-            .AddTeamsPhoneTools();
+            .AddTeamsPhoneTools()
+            .AddPowerShellStageExecution()
+            .AddLocalTenantCredentials();
 
         await builder.Build().RunAsync();
     }
@@ -69,7 +71,9 @@ public class Program
         builder.Services
             .AddMcpServer()
             .WithHttpTransport()
-            .AddTeamsPhoneTools();
+            .AddTeamsPhoneTools()
+            .AddPowerShellStageExecution()
+            .AddLocalTenantCredentials();
 
         var app = builder.Build();
 

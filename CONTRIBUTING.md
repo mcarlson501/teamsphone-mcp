@@ -27,6 +27,9 @@ dotnet build TeamsPhoneMcp.sln
 dotnet test  TeamsPhoneMcp.sln
 ```
 
+For the full testing playbook — PowerShell (Pester) tests, a local server smoke test, and a
+gated live end-to-end call against a real tenant — see [docs/testing.md](docs/testing.md).
+
 - Target framework: **.NET 8** (pinned via `global.json`).
 - Shared build settings live in `Directory.Build.props` (`nullable`, implicit usings,
   warnings-as-errors). Keep the build warning-clean.

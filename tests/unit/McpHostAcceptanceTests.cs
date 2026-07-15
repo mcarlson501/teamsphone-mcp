@@ -27,7 +27,7 @@ public class McpHostAcceptanceTests : IClassFixture<WebApplicationFactory<Progra
         var tools = await client.ListToolsAsync();
 
         Assert.Equal(
-            ["mock-write-user-policy", "ping"],
+            ["get-user-voice-config", "mock-write-user-policy", "ping"],
             tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal));
 
         var ping = tools.Single(tool => tool.Name == "ping").ProtocolTool;
@@ -43,6 +43,15 @@ public class McpHostAcceptanceTests : IClassFixture<WebApplicationFactory<Progra
         var properties = mockWrite.InputSchema.GetProperty("properties");
         Assert.True(properties.TryGetProperty("targetUserUpn", out _));
         Assert.True(properties.TryGetProperty("confirmationToken", out _));
+
+        var voiceConfig = tools.Single(tool => tool.Name == "get-user-voice-config").ProtocolTool;
+        Assert.True(voiceConfig.Annotations?.ReadOnlyHint);
+        Assert.False(voiceConfig.Annotations?.DestructiveHint);
+        Assert.True(voiceConfig.Annotations?.IdempotentHint);
+        var voiceProperties = voiceConfig.InputSchema.GetProperty("properties");
+        Assert.True(voiceProperties.TryGetProperty("tenantId", out _));
+        Assert.True(voiceProperties.TryGetProperty("credentialRef", out _));
+        Assert.True(voiceProperties.TryGetProperty("userUpn", out _));
     }
 
     [Fact]
@@ -77,6 +86,33 @@ public class McpHostAcceptanceTests : IClassFixture<WebApplicationFactory<Progra
         Assert.NotEqual(true, result.IsError);
         var content = Assert.IsType<TextContentBlock>(Assert.Single(result.Content));
         Assert.Contains("acceptance-pong", content.Text);
+    }
+
+    [Fact]
+    public async Task CallTool_ManifestPipelineTool_FailsClosedWithoutConfiguredCredential()
+    {
+        await using var client = await CreateMcpClientAsync();
+
+        var result = await client.CallToolAsync(
+            "get-user-voice-config",
+            new Dictionary<string, object?>
+            {
+                ["tenantId"] = "00000000-0000-0000-0000-000000000001",
+                ["credentialRef"] = "unconfigured-credential",
+                ["userUpn"] = "user@example.com"
+            });
+
+        Assert.True(result.IsError);
+        Assert.NotNull(result.StructuredContent);
+
+        var envelope = result.StructuredContent!.Value;
+        Assert.Equal("Failed", envelope.GetProperty("status").GetString());
+        Assert.Equal("get-user-voice-config", envelope.GetProperty("toolId").GetString());
+        Assert.Equal("authenticationFailed", envelope.GetProperty("error").GetProperty("code").GetString());
+
+        // The credential reference and other inputs must never leak into the client-facing error.
+        var message = envelope.GetProperty("error").GetProperty("message").GetString();
+        Assert.DoesNotContain("unconfigured-credential", message);
     }
 
     [Fact]

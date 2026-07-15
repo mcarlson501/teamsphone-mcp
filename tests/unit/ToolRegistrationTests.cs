@@ -8,6 +8,7 @@ using TeamsPhoneMcp.Core.Execution;
 using TeamsPhoneMcp.Core.Manifests;
 using TeamsPhoneMcp.Core.Policy;
 using TeamsPhoneMcp.Core.Sessions;
+using TeamsPhoneMcp.Core.Tools;
 
 namespace TeamsPhoneMcp.UnitTests;
 
@@ -23,8 +24,13 @@ public class ToolRegistrationTests
         var tools = provider.GetServices<McpServerTool>().ToList();
 
         var names = tools.Select(t => t.ProtocolTool.Name).OrderBy(name => name, StringComparer.Ordinal).ToList();
-        Assert.Equal(["mock-write-user-policy", "ping"], names);
-        Assert.All(tools, tool => Assert.IsType<ManifestValidatingMcpServerTool>(tool));
+        Assert.Equal(["get-user-voice-config", "mock-write-user-policy", "ping"], names);
+
+        // The hand-written tools stay manifest-validated; manifest-driven tools
+        // (run.ps1 present) auto-register as pipeline tools.
+        Assert.IsType<ManifestValidatingMcpServerTool>(tools.Single(t => t.ProtocolTool.Name == "ping"));
+        Assert.IsType<ManifestValidatingMcpServerTool>(tools.Single(t => t.ProtocolTool.Name == "mock-write-user-policy"));
+        Assert.IsType<ManifestPipelineTool>(tools.Single(t => t.ProtocolTool.Name == "get-user-voice-config"));
     }
 
     [Fact]

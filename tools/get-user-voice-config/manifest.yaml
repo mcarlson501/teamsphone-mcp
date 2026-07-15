@@ -1,0 +1,16 @@
+id: get-user-voice-config
+version: 1.0.0
+summary: Read the Teams Phone voice configuration for a single user (enterprise voice, calling policy, voice routing policy, dial plan, and assigned line URI).
+category: read
+riskTier: 0
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  userUpn: { type: string, format: upn, required: true }
+maxBlastRadius: 0
+timeoutSeconds: 120
