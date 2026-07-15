@@ -1,10 +1,12 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 using TeamsPhoneMcp.Core;
 using TeamsPhoneMcp.Core.Manifests;
 using TeamsPhoneMcp.Core.Policy;
+using TeamsPhoneMcp.Core.Sessions;
 
 namespace TeamsPhoneMcp.UnitTests;
 
@@ -50,6 +52,76 @@ public class ToolRegistrationTests
         Assert.Contains(catalog.All, manifest => manifest.Id == "mock-write-user-policy");
 
         await host.StopAsync();
+    }
+
+    [Fact]
+    public async Task AddTeamsPhoneTools_RegistersTenantSessionDefaults()
+    {
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
+        builder.Services.AddMcpServer().AddTeamsPhoneTools();
+
+        using var host = builder.Build();
+        await host.StartAsync();
+
+        var options = host.Services.GetRequiredService<IOptions<TenantSessionOptions>>().Value;
+        var concreteManager = host.Services.GetRequiredService<TenantSessionManager>();
+        Assert.Equal(TimeSpan.FromMinutes(10), options.IdleTimeout);
+        Assert.Equal(10, options.MaxSessions);
+        Assert.Equal(TimeSpan.FromMinutes(1), options.CleanupInterval);
+        Assert.Same(concreteManager, host.Services.GetRequiredService<ITenantSessionManager>());
+
+        await host.StopAsync();
+    }
+
+    [Fact]
+    public async Task AddTeamsPhoneTools_DefaultTenantSessionFactoryFailsClosed()
+    {
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
+        builder.Services.AddMcpServer().AddTeamsPhoneTools();
+
+        using var host = builder.Build();
+        await host.StartAsync();
+        var manager = host.Services.GetRequiredService<ITenantSessionManager>();
+
+        var exception = await Assert.ThrowsAsync<TenantSessionException>(() =>
+            manager.ExecuteAsync(
+                new TenantSessionContext(
+                    Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                    "test-credential"),
+                TenantOperationKind.Read,
+                static (_, _) => Task.FromResult(true)));
+
+        Assert.Equal("tenantSessionFactoryUnavailable", exception.ErrorCode);
+        await host.StopAsync();
+    }
+
+    [Fact]
+    public void AddTeamsPhoneTools_PreservesRegisteredTenantSessionFactory()
+    {
+        var factory = new TestTenantSessionFactory();
+        var services = new ServiceCollection();
+        services.AddSingleton<ITenantSessionFactory>(factory);
+        services.AddMcpServer().AddTeamsPhoneTools();
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Same(factory, provider.GetRequiredService<ITenantSessionFactory>());
+    }
+
+    [Theory]
+    [InlineData("TenantSessions:IdleTimeout", "00:00:00")]
+    [InlineData("TenantSessions:MaxSessions", "0")]
+    [InlineData("TenantSessions:CleanupInterval", "00:11:00")]
+    public async Task AddTeamsPhoneTools_FailsHostStartup_WhenTenantSessionOptionsAreInvalid(
+        string key,
+        string value)
+    {
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
+        builder.Configuration[key] = value;
+        builder.Services.AddMcpServer().AddTeamsPhoneTools();
+
+        using var host = builder.Build();
+        await Assert.ThrowsAsync<OptionsValidationException>(() => host.StartAsync());
     }
 
     [Fact]
@@ -157,5 +229,13 @@ public class ToolRegistrationTests
         }
 
         return destinationRoot;
+    }
+
+    private sealed class TestTenantSessionFactory : ITenantSessionFactory
+    {
+        public ValueTask<ITenantExecutionSession> CreateAsync(
+            TenantSessionContext context,
+            CancellationToken cancellationToken) =>
+            ValueTask.FromException<ITenantExecutionSession>(new NotSupportedException());
     }
 }

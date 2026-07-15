@@ -4,10 +4,10 @@ Thanks for your interest in contributing. This is a pre-release project under ac
 development. Public APIs and manifest contracts may change before the first release,
 and the repository is not ready for production or live-tenant use.
 
-The current surface is the M1 manifest, C# tool, and policy boundary. M2 work begins
-with tenant-session isolation and execution contracts before PowerShell or live
-Microsoft 365 integration. Open an issue before starting a broad architectural change
-so the work can be aligned with the milestone plan.
+The current surface includes the M1 manifest/tool/policy boundary and the offline M2
+tenant-session foundation. PowerShell, credentials, and live Microsoft 365 integration
+remain intentionally unavailable. Open an issue before starting a broad architectural
+change so the work can be aligned with the milestone plan.
 
 ## Ground rules (from the build spec)
 
@@ -36,7 +36,7 @@ dotnet test  TeamsPhoneMcp.sln
 | Path                        | Purpose                                                        |
 | --------------------------- | ------------------------------------------------------------- |
 | `src/TeamsPhoneMcp.Host/`   | Entrypoint, transports, auth + correlation-logging middleware. |
-| `src/TeamsPhoneMcp.Core/`   | Tools and the central `AddTeamsPhoneTools` registration seam.  |
+| `src/TeamsPhoneMcp.Core/`   | Tools, policy, manifests, and tenant-session lifecycle.        |
 | `tests/unit/`               | xUnit tests.                                                   |
 
 ## Adding a tool

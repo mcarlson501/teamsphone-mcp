@@ -12,13 +12,14 @@ We aim to acknowledge reports within a few business days.
 
 This project is pre-release, under active development, and not approved for
 production or live-tenant use. There are no production-supported versions or security
-service-level commitments. The current M1 implementation does not connect to
+service-level commitments. The current implementation does not connect to
 Microsoft Teams, Microsoft Graph, or Microsoft 365 and does not accept tenant
 credentials.
 
-The controls below describe the implemented host and policy boundary. Credential
-handling, PowerShell execution, tenant sessions, and tenant isolation are M2 work and
-must pass their milestone security tests before any live integration is considered.
+The controls below describe the implemented host, policy, and offline tenant-session
+boundary. Credential handling, PowerShell execution, and live tenant isolation remain
+M2 work and must pass their milestone security tests before any live integration is
+considered.
 
 ## Security model (summary)
 
@@ -40,9 +41,11 @@ tenants, so security is treated as acceptance-blocking, not optional:
   short-lived HMAC confirmation token bound to the tool, tenant, and canonical
   business parameters; changed parameters, expired tokens, and cross-context token
   use are rejected.
-- **Tenant isolation is not implemented yet.** M2 must make tenant identity immutable
-  on each session and prove through isolation tests that no execution context crosses
-  tenants. Until that boundary exists, this project must not connect to live tenants.
+- **Tenant isolation is being built offline first.** The session manager binds each
+  session to an immutable tenant and credential reference, coordinates reads/writes,
+  and has interleaved isolation tests. Real credentials and runspaces are not connected
+  yet; live isolation must be proven again when those adapters land. Until then, this
+  project must not connect to live tenants.
 
 ## Supported versions
 

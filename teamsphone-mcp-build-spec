@@ -107,11 +107,11 @@ Rationale:
 ### 4.1 TenantSessionManager — the critical component
 
 Rules (encode as invariants + tests, not comments):
-- A runspace is created FOR one tenantId and is destroyed WITHOUT ever serving another. Re-keying a runspace is forbidden by construction (tenantId is immutable on the session object).
+- A runspace is created FOR one `(tenantId, credentialRef)` context and is destroyed WITHOUT ever serving another. Re-keying a runspace is forbidden by construction (both values are immutable on the session object); a different credential reference for a live tenant is rejected.
 - Session creation: new runspace → import MicrosoftTeams module → `Connect-MicrosoftTeams` with that tenant's cert → mark ready. (This is the expensive step, 10–30s; it's paid once per tenant per warm period, not per call.)
-- Idle timeout (default 10 min, configurable): disconnect + dispose runspace.
-- Concurrency: **one write at a time per tenant** (serialize via per-tenant semaphore); reads may run concurrent with reads but not with a write.
-- Cap on concurrent live sessions (default 10) with LRU eviction; a hard cap on total memory is a v1.1 concern.
+- Idle timeout (default 10 min, configurable) applies only between invocations: disconnect + dispose runspace. Active and lock-waiting operations are never idle.
+- Concurrency: **one write at a time per tenant** (serialize via a per-tenant async reader/writer lock); reads may run concurrent with reads but not with a write.
+- Cap on concurrent live sessions (default 10) with LRU eviction of inactive sessions. If every slot is active or initializing, fail closed with a retryable capacity error; a hard cap on total memory is a v1.1 concern.
 - On any auth failure or runspace-level error: dispose the session entirely; never attempt to repair a possibly-corrupted session.
 
 ---
@@ -347,8 +347,8 @@ Scaffold solution, MCP C# SDK wired, stdio + Streamable HTTP, bearer auth middle
 **M1 — Tool registry + policy engine (no PowerShell yet; complete)**
 Manifest loader → JSON Schema → MCP tool registration with annotations; dry-run/confirmation-token flow; tier gating; blast-radius checks; `_template` folder. ✅ Unit tests green; a mock write tool demonstrates the full two-step token flow through Inspector.
 
-**M2 — PowerShell execution engine + tenant sessions**
-Runspace hosting, TenantSessionManager with all §4.1 invariants, stage pipeline runner, `tools/common` module, local credential provider. ✅ Isolation test passes; `get-user-voice-config` runs end-to-end against the dev tenant.
+**M2 — PowerShell execution engine + tenant sessions (in progress)**
+Runspace hosting, TenantSessionManager with all §4.1 invariants, stage pipeline runner, `tools/common` module, local credential provider. The offline session foundation is implemented first and fails closed without a configured execution factory. ✅ Isolation test passes; `get-user-voice-config` runs end-to-end against the dev tenant.
 
 **M3 — Phase A reads + audit foundation**
 All 10 Phase A tools + Pester suites + the §9 audit pipeline (JSONL schema, redaction, correlationIds, retention sweeper). ✅ Snapshot of dev tenant completes; every call (incl. a forced failure) produces a valid audit record.
@@ -370,12 +370,12 @@ Rate limiting, log scrubber test, Dockerfile with pinned module, docs complete, 
 - Manifest schema-valid; version bumped if behavior changed
 - Unit/Pester tests included and green; isolation test untouched or strengthened, never weakened
 - No secrets, tenant names, or real numbers in code, tests, or fixtures
-- Audit log entries produced for every execution path incl. failures
+- Once the M3 audit foundation lands, audit log entries produced for every execution path incl. failures
 - README/docs updated when contracts or setup change
 
-## 13. Decisions the Human Must Make Before M2 (agent: stop and ask)
-1. Dev/test tenant: M365 developer tenant + Teams Phone trial or paid test licenses — which, and who provisions numbers in it?
-2. Cert strategy for dev: self-signed OK for the dev tenant app registration? (yes recommended)
-3. Confirm .NET host choice vs. TypeScript alternative (spec assumes .NET).
-4. Public repo from day one, or private until M4 then open?
-5. Idle-timeout and session-cap defaults acceptable, or tune for the always-on local-hardware deployment?
+## 13. Decisions Recorded Before M2
+1. Dev/test tenant: a dedicated nonproduction tenant controlled by the maintainer is ready with Teams Phone licensing and test numbers; only synthetic identities/data may be used.
+2. Cert strategy for dev: use a self-signed certificate for the development app registration; certificate and app-registration setup are still pending and no certificate material belongs in this repository.
+3. Host: .NET is confirmed.
+4. Repository: public, with explicit experimental/nonproduction warnings.
+5. Session defaults: configurable 10-minute idle timeout and 10-session cap accepted initially; tune later using measured runspace memory and workload behavior.

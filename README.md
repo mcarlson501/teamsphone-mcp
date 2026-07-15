@@ -18,9 +18,9 @@ The repository is tenant-agnostic and contains no customer data or baked-in
 credentials. The current code does not accept tenant credentials or connect to
 Microsoft 365.
 
-> **Project status:** Milestone M1 is complete and M2 is next. Interfaces, manifests,
-> and configuration may change without backward compatibility before the first
-> release.
+> **Project status:** Milestone M1 is complete and M2 is in progress. Interfaces,
+> manifests, and configuration may change without backward compatibility before the
+> first release.
 
 ## What works today
 
@@ -29,6 +29,8 @@ Microsoft 365.
 - Strict YAML manifests with startup schema and annotation parity checks.
 - Raw tool-argument validation before C# binding.
 - Risk tiers, blast-radius checks, dry-run defaults, and HMAC confirmation tokens.
+- An offline-tested tenant session manager with immutable tenant/credential context,
+  read/write coordination, idle expiry, LRU eviction, and fatal-session replacement.
 - A read-only `ping` tool and `mock-write-user-policy` safety-flow demonstration.
 - Release build and test coverage in GitHub Actions.
 
@@ -36,7 +38,8 @@ Microsoft 365.
 
 - Connections to Microsoft Teams, Microsoft Graph, or any Microsoft 365 tenant.
 - Credential providers, certificate authentication, or secret storage.
-- PowerShell runspaces, tenant sessions, session isolation, or real telephony tools.
+- PowerShell runspaces, live tenant connections, credential loading, or real
+   telephony tools.
 - Audit storage, the full staged execution pipeline, container packaging, or a
    supported release artifact.
 
@@ -85,6 +88,9 @@ The host selects its transport from the command line / environment:
 | Client auth token (HTTP)       | `TEAMSPHONE_MCP_BEARER_TOKEN` (or `Auth:BearerToken`) | Static token clients must present    |
 | Confirmation token signing key | `TEAMSPHONE_MCP_CONFIRMATION_TOKEN_KEY` (or `Policy:ConfirmationTokenKey`) | Base64 key to keep dry-run confirmation tokens valid across restarts |
 | Tool manifest root             | `ToolManifests__ToolsRootPath` (or `ToolManifests:ToolsRootPath`) | Optional manifest directory override |
+| Session idle timeout           | `TenantSessions__IdleTimeout` (or `TenantSessions:IdleTimeout`) | Inactive session lifetime; default `00:10:00` |
+| Maximum tenant sessions        | `TenantSessions__MaxSessions` (or `TenantSessions:MaxSessions`) | Live session cap; default `10` |
+| Session cleanup interval       | `TenantSessions__CleanupInterval` (or `TenantSessions:CleanupInterval`) | Idle-session scan interval; default `00:01:00` |
 | Transport = stdio              | `TEAMSPHONE_MCP_STDIO=true` (or `--stdio`)    | Use stdio instead of HTTP                 |
 | HTTP bind address              | `ASPNETCORE_URLS`                             | e.g. `http://127.0.0.1:5199`              |
 
@@ -154,10 +160,11 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:5199/mcp \
 
 ## Next milestone
 
-M1 intentionally keeps C# handlers as the invocation source. Dynamic PowerShell
-dispatch, runspaces, credentials, tenant isolation, audit storage, server mode
-ceilings, Docker packaging, and real Teams tools remain M2 or later work. M2 starts
-with tenant-session isolation and execution contracts before any live integration.
+M1 intentionally keeps C# handlers as the invocation source. M2's offline session
+foundation is now in progress; the default session factory fails closed until a real
+credential and PowerShell adapter is implemented. Dynamic PowerShell dispatch,
+connected runspaces, the stage pipeline, audit storage, server mode ceilings, Docker
+packaging, and real Teams tools remain M2 or later work.
 
 ## License
 
