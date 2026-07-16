@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using System.Reflection;
 using TeamsPhoneMcp.Core.Execution;
@@ -11,6 +12,7 @@ using TeamsPhoneMcp.Core.Policy;
 using TeamsPhoneMcp.Core.Sessions;
 using ModelContextProtocol.Server;
 using TeamsPhoneMcp.Core.Tools;
+using TeamsPhoneMcp.Credentials;
 
 namespace TeamsPhoneMcp.Core;
 
@@ -78,6 +80,9 @@ public static class ToolRegistration
         builder.Services.AddHostedService<TenantSessionCleanupService>();
         builder.Services.TryAddSingleton<IStageExecutor, UnconfiguredStageExecutor>();
         builder.Services.TryAddSingleton<IToolPipelineRunner, ToolPipelineRunner>();
+        builder.Services
+            .AddOptions<PowerShellTenantConnectionOptions>()
+            .BindConfiguration(PowerShellTenantConnectionOptions.SectionName);
 
         builder.WithTools(
         [
@@ -85,7 +90,67 @@ public static class ToolRegistration
             CreateManifestValidatedTool<MockWriteTool>(nameof(MockWriteTool.MockWriteUserPolicy))
         ]);
 
+        RegisterManifestPipelineTools(builder.Services);
+
         return builder;
+    }
+
+    /// <summary>
+    /// Opt-in registration of the self-host credential provider and the real
+    /// certificate-authenticated PowerShell tenant session factory. Kept out of
+    /// <see cref="AddTeamsPhoneTools"/> so the default posture (and every unit
+    /// test) stays fail-closed with the <see cref="UnconfiguredTenantSessionFactory"/>.
+    /// </summary>
+    public static IMcpServerBuilder AddLocalTenantCredentials(this IMcpServerBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Services.TryAddSingleton<ICredentialProvider, LocalCredentialProvider>();
+        builder.Services.RemoveAll<ITenantSessionFactory>();
+        builder.Services.AddSingleton<ITenantSessionFactory, PowerShellTenantSessionFactory>();
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Registers a manifest-driven <see cref="ManifestPipelineTool"/> for every
+    /// tool folder that ships both a <c>manifest.yaml</c> and a <c>run.ps1</c>
+    /// (excluding the <c>_template</c>). Tools with hand-written C# handlers
+    /// (ping, mock-write) intentionally have no <c>run.ps1</c> and so are not
+    /// double-registered here. Manifests are parsed eagerly so the tool's
+    /// protocol contract is available without the DI catalog; any manifest
+    /// problems are surfaced authoritatively by the startup validator.
+    /// </summary>
+    private static void RegisterManifestPipelineTools(IServiceCollection services)
+    {
+        var toolsRoot = Path.Combine(AppContext.BaseDirectory, "tools");
+        if (!Directory.Exists(toolsRoot))
+        {
+            return;
+        }
+
+        ToolManifestCatalog catalog;
+        try
+        {
+            catalog = new ToolManifestCatalog(toolsRoot, NullLogger<ToolManifestCatalog>.Instance);
+        }
+        catch (InvalidOperationException)
+        {
+            // Missing/invalid manifests are reported by ManifestCatalogStartupValidator.
+            return;
+        }
+
+        foreach (var manifest in catalog.All)
+        {
+            var scriptPath = Path.Combine(toolsRoot, manifest.Id, ToolScriptLocator.ScriptFileName);
+            if (!File.Exists(scriptPath))
+            {
+                continue;
+            }
+
+            var toolManifest = manifest;
+            services.AddSingleton<McpServerTool>(_ => new ManifestPipelineTool(toolManifest));
+        }
     }
 
     /// <summary>

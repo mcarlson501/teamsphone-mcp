@@ -13,6 +13,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{6FC2767A
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TeamsPhoneMcp.UnitTests", "tests\unit\TeamsPhoneMcp.UnitTests.csproj", "{23D3204D-4A81-45CB-9C85-799D78EB4FA7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TeamsPhoneMcp.Credentials", "src\TeamsPhoneMcp.Credentials\TeamsPhoneMcp.Credentials.csproj", "{F1F3361E-4340-45E7-B1D7-C4EF920E1D9F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -34,10 +36,15 @@ Global
 		{23D3204D-4A81-45CB-9C85-799D78EB4FA7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{23D3204D-4A81-45CB-9C85-799D78EB4FA7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{23D3204D-4A81-45CB-9C85-799D78EB4FA7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F1F3361E-4340-45E7-B1D7-C4EF920E1D9F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F1F3361E-4340-45E7-B1D7-C4EF920E1D9F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F1F3361E-4340-45E7-B1D7-C4EF920E1D9F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F1F3361E-4340-45E7-B1D7-C4EF920E1D9F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{07A4CE40-043B-432D-A2E2-6E29E9FC2523} = {27B91323-9BB4-4B40-80FB-0B834B22B2C1}
 		{758A1E24-5E13-40E5-A7BC-3DCE56705AD2} = {27B91323-9BB4-4B40-80FB-0B834B22B2C1}
 		{23D3204D-4A81-45CB-9C85-799D78EB4FA7} = {6FC2767A-3A03-4FC1-93FA-B3C8FF3B673B}
+		{F1F3361E-4340-45E7-B1D7-C4EF920E1D9F} = {27B91323-9BB4-4B40-80FB-0B834B22B2C1}
 	EndGlobalSection
 EndGlobal
