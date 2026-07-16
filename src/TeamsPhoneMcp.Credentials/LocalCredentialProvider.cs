@@ -38,13 +38,14 @@ public sealed class LocalCredentialProvider : ICredentialProvider
 
     public ValueTask<TenantCredential> ResolveAsync(string credentialRef, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (string.IsNullOrWhiteSpace(credentialRef))
         {
             throw new CredentialResolutionException("A credentialRef is required.");
         }
 
         var entry = ReadEntry(credentialRef.Trim());
-
         if (!Guid.TryParse(entry.TenantId, out var tenantId) || tenantId == Guid.Empty)
         {
             throw new CredentialResolutionException(
