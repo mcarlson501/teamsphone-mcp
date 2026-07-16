@@ -190,16 +190,14 @@ internal sealed class PowerShellTenantSession : IPowerShellTenantSession
         cancellationToken.ThrowIfCancellationRequested();
 
         var asyncResult = powerShell.BeginInvoke();
-        await using (cancellationToken.Register(static state => ((PowerShell)state!).Stop(), powerShell).ConfigureAwait(false))
+        using var registration = cancellationToken.Register(static state => ((PowerShell)state!).Stop(), powerShell);
+        try
         {
-            try
-            {
-                await Task.Factory.FromAsync(asyncResult, powerShell.EndInvoke).ConfigureAwait(false);
-            }
-            catch (PipelineStoppedException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw new OperationCanceledException(cancellationToken);
-            }
+            await Task.Factory.FromAsync(asyncResult, powerShell.EndInvoke).ConfigureAwait(false);
+        }
+        catch (PipelineStoppedException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(cancellationToken);
         }
 
         if (powerShell.HadErrors || powerShell.Streams.Error.Count > 0)
