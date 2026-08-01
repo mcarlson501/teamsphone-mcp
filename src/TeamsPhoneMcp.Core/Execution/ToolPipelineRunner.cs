@@ -194,6 +194,19 @@ public sealed class ToolPipelineRunner : IToolPipelineRunner
             return Failure(ToolExecutionStatus.PreflightFailed, preflight);
         }
 
+        // A stage may also report failure structurally: reporting the failing
+        // check is more useful to an operator than a bare stage error, so a
+        // false check is authoritative even when the stage itself succeeded.
+        if (HasFailedCheck(state.Preflight))
+        {
+            return new PipelineOutcome(
+                ToolExecutionStatus.PreflightFailed,
+                ConfirmationToken: null,
+                new ToolError(
+                    StageErrorCodes.PreflightFailed,
+                    "One or more preflight checks failed; no changes were made."));
+        }
+
         var dryRun = await RunStageAsync(session, request, ToolStage.DryRun, stageInput, state, cancellationToken);
         if (!dryRun.Succeeded)
         {
@@ -242,6 +255,14 @@ public sealed class ToolPipelineRunner : IToolPipelineRunner
         if (!verify.Succeeded)
         {
             return await HandleFailureAsync(session, request, state, stageInput, verify, verifyFailed: true, cancellationToken);
+        }
+
+        if (HasFailedCheck(state.Verification))
+        {
+            var failedVerification = StageExecutionResult.Failure(
+                StageErrorCodes.VerifyFailed,
+                "One or more verification checks failed after the change was applied.");
+            return await HandleFailureAsync(session, request, state, stageInput, failedVerification, verifyFailed: true, cancellationToken);
         }
 
         return new PipelineOutcome(ToolExecutionStatus.Succeeded, ConfirmationToken: null, Error: null);
@@ -340,6 +361,10 @@ public sealed class ToolPipelineRunner : IToolPipelineRunner
 
     private static PipelineOutcome Failure(ToolExecutionStatus status, StageExecutionResult result) =>
         new(status, ConfirmationToken: null, ResultEnvelopeBuilder.Sanitize(result.ErrorCode, result.SanitizedMessage));
+
+    /// <summary>True when a stage reported at least one check with <c>passed: false</c>.</summary>
+    private static bool HasFailedCheck(IReadOnlyList<ToolCheckResult>? checks) =>
+        checks is not null && checks.Any(check => !check.Passed);
 
     private static void ApplyResultOutput(PipelineExecutionState state, StageExecutionResult result)
     {

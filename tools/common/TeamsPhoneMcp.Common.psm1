@@ -60,6 +60,25 @@ function Write-StageResult {
 
 <#
 .SYNOPSIS
+    Emits the single JSON result string for the `snapshot` stage.
+.DESCRIPTION
+    Unlike every other stage, the snapshot stage's output *is* the captured
+    state: the host stores it verbatim as the envelope's `diff.before` and
+    threads it back to later stages as `.snapshot`. So it is emitted as a bare
+    object rather than wrapped in the summary/after/checks envelope.
+#>
+function Write-StageSnapshot {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$State
+    )
+
+    return ($State | ConvertTo-Json -Depth 32 -Compress)
+}
+
+<#
+.SYNOPSIS
     Detects a Microsoft Graph / Teams throttling (HTTP 429) response.
 #>
 function Test-IsThrottlingError {
@@ -311,4 +330,4 @@ function Select-StagePage {
     }
 }
 
-Export-ModuleMember -Function Get-StageInput, Write-StageResult, Test-IsThrottlingError, Invoke-WithRetry, Wait-ForCondition, Get-PropertyValue, Test-IsGuid, Get-AssignedPolicyName, ConvertTo-E164Number, Select-StagePage
+Export-ModuleMember -Function Get-StageInput, Write-StageResult, Write-StageSnapshot, Test-IsThrottlingError, Invoke-WithRetry, Wait-ForCondition, Get-PropertyValue, Test-IsGuid, Get-AssignedPolicyName, ConvertTo-E164Number, Select-StagePage

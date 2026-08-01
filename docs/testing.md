@@ -57,6 +57,9 @@ dotnet test tests/unit --filter FullyQualifiedName~CallTool_ManifestPipelineTool
 
 # Audit trail: redaction, the JSONL sink, retention, and end-to-end record writing.
 dotnet test tests/unit --filter FullyQualifiedName~Audit
+
+# Write pipeline: dry-run → confirm → execute → verify, and the forced rollback path.
+dotnet test tests/unit --filter FullyQualifiedName~WritePipelineAcceptanceTests
 ```
 
 These tests use **no tenant and no credentials** — the fail-closed test deliberately calls
@@ -113,8 +116,8 @@ export ASPNETCORE_URLS='http://localhost:5111'
 dotnet run --project src/TeamsPhoneMcp.Host
 ```
 
-On startup you should see `Loaded 12 tool manifests` and `Validated 12 tool manifests
-against 12 registered MCP tools`. In another terminal, verify the auth gate:
+On startup you should see `Loaded 13 tool manifests` and `Validated 13 tool manifests
+against 13 registered MCP tools`. In another terminal, verify the auth gate:
 
 ```bash
 # No token → 401.
@@ -185,18 +188,18 @@ dev tenant, asserts each result envelope, and then asserts that the audit trail 
 every call with no credential material. This is the M3 acceptance run. It uses the same
 gating variables and also skips cleanly when they are unset.
 
-Keep tenant values out of tracked files — put them in a gitignored `.env.integration` and
-supply the credential itself through environment variables rather than editing
-`appsettings.Development.json`:
+Keep tenant values out of tracked files — copy `.env.integration.template` to a
+gitignored `.env.integration` and fill it in. The credential keys the host reads contain
+a hyphen (`Credentials__dev-tenant__ClientId`), which no shell can export as a variable,
+so the file holds shell-safe `TP_CRED_*` names and `scripts/live-test.sh` translates them
+with `env(1)`:
 
 ```bash
 # .env.integration  (gitignored — never commit real tenant values)
 TEAMSPHONE_MCP_DEV_PFX_PASSWORD='<your pfx export password>'
-
-Credentials__dev-tenant__TenantId='<directory tenant id>'
-Credentials__dev-tenant__ClientId='<application (client) id>'
-Credentials__dev-tenant__CertificatePath='/Users/you/.config/teamsphone-mcp/teamsphone-mcp-dev.pfx'
-Credentials__dev-tenant__CertificatePasswordEnvVar='TEAMSPHONE_MCP_DEV_PFX_PASSWORD'
+TP_CRED_TENANT_ID='<directory tenant id>'
+TP_CRED_CLIENT_ID='<application (client) id>'
+TP_CRED_CERT_PATH="$HOME/.config/teamsphone-mcp/teamsphone-mcp-dev.pfx"
 
 TEAMSPHONE_MCP_IT_TENANT_ID='<directory tenant id>'
 TEAMSPHONE_MCP_IT_CREDENTIAL_REF='dev-tenant'
@@ -210,14 +213,48 @@ TEAMSPHONE_MCP_IT_AUTO_ATTENDANT='<an auto attendant name or guid>'
 
 ```bash
 set -a; source .env.integration; set +a
-ASPNETCORE_ENVIRONMENT=Development \
-  dotnet test tests/unit --filter FullyQualifiedName~PhaseAIntegration -l 'console;verbosity=detailed'
+./scripts/live-test.sh --filter FullyQualifiedName~PhaseAIntegration -l 'console;verbosity=detailed'
 ```
 
 The test prints each tool's `summary` line, so a pass doubles as a readable snapshot of the
 dev tenant. It fails if any tool returns a non-`Succeeded` envelope, if the number of audit
 records does not match the number of calls, or if the audit text matches a private-key,
 thumbprint, or JWT shape.
+
+### Option A3 — the live write-pipeline demo (M4 sign-off)
+
+`tests/unit/MoveNumberIntegrationTests.cs` drives `move-number-between-users` against
+the dev tenant: dry-run → confirmation token → confirmed execute → verification, then
+moves the number **back** to the source user so the tenant is left as it was found. It
+asserts four audit records (two dry runs, two executes) with both snapshots stored for
+each real change, and no credential material anywhere in the trail.
+
+Tenant prerequisites — the tool's preflight enforces all of these:
+
+- the **source** user currently holds the phone number,
+- the **target** user is licensed for Phone System and has **no** number assigned,
+- the number appears in the tenant's number inventory (`Get-CsPhoneNumberAssignment`).
+
+```bash
+# In addition to the shared TEAMSPHONE_MCP_IT_TENANT_ID / _CREDENTIAL_REF variables:
+TEAMSPHONE_MCP_IT_MOVE_SOURCE_UPN='<user who holds the number>'
+TEAMSPHONE_MCP_IT_MOVE_TARGET_UPN='<voice-licensed user with no number>'
+TEAMSPHONE_MCP_IT_MOVE_NUMBER='+15551234567'   # optional; defaults to the source user's number
+
+# Optional second test: a target the tenant cannot accept (a resource account, or a
+# user without the licence the number type requires). Asserts the move is blocked by
+# preflight with no token issued. This test writes nothing.
+TEAMSPHONE_MCP_IT_MOVE_INELIGIBLE_TARGET_UPN='<a resource account upn>'
+```
+
+```bash
+set -a; source .env.integration; set +a
+./scripts/live-test.sh --filter FullyQualifiedName~MoveNumberIntegration -l 'console;verbosity=detailed'
+```
+
+> This test **writes to your tenant**. It only ever touches the two users you name, and
+> `maxBlastRadius: 1` prevents it from affecting anything else. Replication lag is
+> absorbed by the verify stage's bounded polling.
 
 ### Option B — a real MCP client against the running server
 
@@ -242,6 +279,9 @@ Every tool returns a structured envelope. The `status` field is **PascalCase**:
 | -------- | ------- |
 | `Succeeded` | The tool ran and returned data (see `diff.after`). |
 | `DryRunCompleted` | A write tool previewed its change without applying it. |
+| `PreflightFailed` | A safety check failed; nothing was attempted, and no token was issued. |
+| `RolledBack` | The change failed and the original state was restored. |
+| `VerifyFailedRolledBack` | The change applied but verification failed, so it was rolled back. |
 | `Failed` | Something went wrong; see the `error` object. |
 
 On failure, `error.code` tells you what to fix. `authenticationFailed` is intentionally
@@ -277,3 +317,4 @@ redaction rules, and retention behaviour.
 | Pester `Invoke-Pester` not found | `Install-Module Pester -Scope CurrentUser`. |
 | `Connect-MicrosoftTeams` not found on a live call | `Install-Module MicrosoftTeams -Scope CurrentUser`. |
 | The integration test always passes instantly | It skips when any `TEAMSPHONE_MCP_IT_*` variable is unset — that's expected. Set all three. |
+| A plain `dotnet test` suddenly fails the integration tests | The `TEAMSPHONE_MCP_IT_*` variables are still exported in that shell, so the gated tests run without the credential configuration `scripts/live-test.sh` supplies. Open a new shell, or unset them. |

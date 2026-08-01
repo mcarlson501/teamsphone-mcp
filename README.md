@@ -17,9 +17,9 @@ execution.
 The repository is tenant-agnostic and contains no customer data or baked-in
 credentials. Tenant credentials are supplied entirely through local configuration.
 
-> **Project status:** Milestones M1 and M2 are complete and M3 (Phase A reads plus the
-> audit foundation) is in progress. Interfaces, manifests, and configuration may change
-> without backward compatibility before the first release.
+> **Project status:** Milestones M1–M3 are complete and M4 (the first full-depth write
+> tool) is in progress. Interfaces, manifests, and configuration may change without
+> backward compatibility before the first release.
 
 ## What works today
 
@@ -32,13 +32,16 @@ credentials. Tenant credentials are supplied entirely through local configuratio
   read/write coordination, idle expiry, LRU eviction, and fatal-session replacement.
 - A read-only `ping` tool and `mock-write-user-policy` safety-flow demonstration.
 - Ten Phase A read-only Teams Phone tools, each with its own Pester suite.
+- One full-depth write tool, `move-number-between-users`, exercising every stage
+  (snapshot → preflight → dry-run → execute → verify → rollback) — see
+  [`docs/write-tools.md`](./docs/write-tools.md).
 - A local JSONL audit trail with parameter redaction, correlation ids, snapshot
   storage, and a retention sweeper — see [`docs/audit.md`](./docs/audit.md).
 - Release build and test coverage in GitHub Actions.
 
 ## Not implemented yet
 
-- Write tools beyond the `mock-write-user-policy` demonstration.
+- The remaining Phase D–F write and audit-query tools.
 - Container packaging or a supported release artifact.
 - Hash-chained audit records and OpenTelemetry export (planned post-v1).
 
@@ -63,6 +66,17 @@ roadmap. Issues and focused contributions are welcome; review
 
 Each tool is a `manifest.yaml` + `run.ps1` pair under [`tools/`](./tools) with its own
 Pester suite; adding a tool never requires editing the host engine.
+
+## Write tools (MACD)
+
+| Tool | Tier | What it does |
+| ---- | ---- | ------------ |
+| `move-number-between-users` | 2 | Releases an assigned phone number from one user and assigns it to another, with preflight gating, verification, and automatic rollback |
+
+Write tools are dry-run by default and require an HMAC confirmation token issued by a
+prior dry-run before anything is changed. See
+[`docs/write-tools.md`](./docs/write-tools.md) for the full protocol and for how to
+author one.
 
 ## Layout
 
@@ -179,9 +193,10 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:5199/mcp \
 
 ## Next milestone
 
-M3 delivers the Phase A read tools and the audit foundation. Write (MACD) tools with
-preflight/verify stages, server mode ceilings, Docker packaging, and a supported
-release artifact remain M4 or later work.
+M4 delivers the write pipeline proof: `move-number-between-users` at full depth, which
+sets the quality bar for every later MACD tool. The remaining Phase D–F tools, server
+mode ceilings in deployment guidance, Docker packaging, and a supported release
+artifact remain M5 or later work.
 
 ## License
 

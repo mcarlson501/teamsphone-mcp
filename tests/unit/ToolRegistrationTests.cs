@@ -37,6 +37,7 @@ public class ToolRegistrationTests
                 "list-resource-accounts",
                 "list-voice-policies",
                 "mock-write-user-policy",
+                "move-number-between-users",
                 "ping"
             ],
             names);

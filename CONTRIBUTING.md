@@ -46,14 +46,20 @@ gated live end-to-end call against a real tenant — see [docs/testing.md](docs/
 
 1. Copy `tools/_template/` to `tools/<tool-id>/` and set a kebab-case `id` that
   exactly matches the folder name.
-2. Define every input explicitly. Supported M1 types are `string`, `integer`,
+2. Define every input explicitly. Supported types are `string`, `integer`,
   `number`, and `boolean`; the supported format is `upn`.
-3. Add the C# handler under `src/TeamsPhoneMcp.Core/Tools/` and register it in
-  `AddTeamsPhoneTools`.
+3. Implement the stages your tool needs in `run.ps1` (tier-0 reads implement only
+  `execute`) and add a `run.Tests.ps1` Pester suite alongside it. A manifest plus a
+  `run.ps1` auto-registers as a pipeline tool — **do not edit the host engine**.
 4. Keep the manifest inputs, required fields, and annotations exactly aligned with
   the generated MCP contract.
 5. Add catalog, validation, policy, and host acceptance coverage appropriate to the
   tool's risk tier.
+
+Write tools (`riskTier >= 1`) additionally implement the dry-run/confirmation-token
+protocol, verification, and — from tier 2 — rollback. Read
+[docs/write-tools.md](docs/write-tools.md) and use
+`tools/move-number-between-users/` as the reference implementation.
 
 The host rejects unknown manifest fields and fails startup for missing, orphaned, or
 mismatched tool contracts. At invocation, raw arguments are validated before C#

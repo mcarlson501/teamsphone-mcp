@@ -20,6 +20,21 @@ Describe 'TeamsPhoneMcp.Common' {
         $parsed.page.nextOffset | Should -Be 175
     }
 
+    It 'writes the snapshot stage state as a bare object' {
+        $state = [ordered]@{
+            phoneNumber = '+15551234567'
+            source      = [ordered]@{ userPrincipalName = 'alice@contoso.com' }
+        }
+
+        $result = Write-StageSnapshot -State $state
+
+        $result | Should -HaveCount 1
+        $parsed = $result | ConvertFrom-Json
+        $parsed.phoneNumber | Should -Be '+15551234567'
+        $parsed.source.userPrincipalName | Should -Be 'alice@contoso.com'
+        $parsed.PSObject.Properties.Name | Should -Not -Contain 'after'
+    }
+
     Context 'Get-PropertyValue' {
         It 'returns the default when the property is absent' {
             $value = Get-PropertyValue -InputObject ([pscustomobject]@{ Present = 'yes' }) -Name 'Missing' -Default 'fallback'
