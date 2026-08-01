@@ -1,0 +1,16 @@
+id: get-tenant-voice-snapshot
+version: 1.0.0
+summary: Aggregate a read-only overview of the tenant's voice estate - phone number inventory, resource accounts, call queues, auto attendants, emergency locations, schedules and voice policy counts.
+category: read
+riskTier: 0
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+redactParams: []
+maxBlastRadius: 0
+timeoutSeconds: 300

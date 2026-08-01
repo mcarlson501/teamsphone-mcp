@@ -5,6 +5,11 @@
 
 # dotenv files
 .env
+.env.integration
+
+# Local audit output and test result files
+audit/
+testResults.xml
 
 # Local Microsoft developer tooling state
 Library/Application Support/Microsoft/DeveloperTools/

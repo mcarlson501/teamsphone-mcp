@@ -15,7 +15,13 @@ public sealed record ToolPipelineRequest(
     string CanonicalInputJson,
     TenantSessionContext SessionContext,
     PolicyDecision Decision,
-    string CorrelationId);
+    string CorrelationId)
+{
+    public ToolPipelinePagination? Pagination { get; init; }
+}
+
+/// <summary>Validated host-owned page state passed to a collection tool stage.</summary>
+public sealed record ToolPipelinePagination(int PageSize, int Offset);
 
 /// <summary>
 /// Orchestrates the staged execution of a tool (build spec §6.2–6.3) inside a
@@ -140,7 +146,7 @@ public sealed class ToolPipelineRunner : IToolPipelineRunner
         PipelineExecutionState state,
         CancellationToken cancellationToken)
     {
-        var input = BuildStageInput(request.CanonicalInputJson, snapshotOutput: null);
+        var input = BuildStageInput(request, snapshotOutput: null);
         var execute = await RunStageAsync(session, request, ToolStage.Execute, input, state, cancellationToken);
         if (!execute.Succeeded)
         {
@@ -148,6 +154,16 @@ public sealed class ToolPipelineRunner : IToolPipelineRunner
         }
 
         ApplyResultOutput(state, execute);
+        if (request.Pagination is not null && state.Page is null)
+        {
+            return new PipelineOutcome(
+                ToolExecutionStatus.Failed,
+                ConfirmationToken: null,
+                new ToolError(
+                    StageErrorCodes.MalformedStageOutput,
+                    "The paged tool returned invalid pagination metadata."));
+        }
+
         return new PipelineOutcome(ToolExecutionStatus.Succeeded, ConfirmationToken: null, Error: null);
     }
 
@@ -157,7 +173,7 @@ public sealed class ToolPipelineRunner : IToolPipelineRunner
         PipelineExecutionState state,
         CancellationToken cancellationToken)
     {
-        var preSnapshotInput = BuildStageInput(request.CanonicalInputJson, snapshotOutput: null);
+        var preSnapshotInput = BuildStageInput(request, snapshotOutput: null);
         var snapshot = await RunStageAsync(session, request, ToolStage.Snapshot, preSnapshotInput, state, cancellationToken);
         if (!snapshot.Succeeded)
         {
@@ -169,7 +185,7 @@ public sealed class ToolPipelineRunner : IToolPipelineRunner
             state.Before = snapshot.Output.Value.Clone();
         }
 
-        var stageInput = BuildStageInput(request.CanonicalInputJson, snapshot.Output);
+        var stageInput = BuildStageInput(request, snapshot.Output);
 
         var preflight = await RunStageAsync(session, request, ToolStage.Preflight, stageInput, state, cancellationToken);
         state.Preflight = ExtractChecks(preflight.Output);
@@ -197,7 +213,7 @@ public sealed class ToolPipelineRunner : IToolPipelineRunner
         PipelineExecutionState state,
         CancellationToken cancellationToken)
     {
-        var preSnapshotInput = BuildStageInput(request.CanonicalInputJson, snapshotOutput: null);
+        var preSnapshotInput = BuildStageInput(request, snapshotOutput: null);
         var snapshot = await RunStageAsync(session, request, ToolStage.Snapshot, preSnapshotInput, state, cancellationToken);
         if (!snapshot.Succeeded)
         {
@@ -211,7 +227,7 @@ public sealed class ToolPipelineRunner : IToolPipelineRunner
 
         // Snapshot is threaded into every mutating/undo stage so the tool script
         // stays stateless and rollback has the fresh pre-execution state.
-        var stageInput = BuildStageInput(request.CanonicalInputJson, snapshot.Output);
+        var stageInput = BuildStageInput(request, snapshot.Output);
 
         var execute = await RunStageAsync(session, request, ToolStage.Execute, stageInput, state, cancellationToken);
         if (!execute.Succeeded)
@@ -341,6 +357,43 @@ public sealed class ToolPipelineRunner : IToolPipelineRunner
         {
             state.After = after.Clone();
         }
+
+        if (TryExtractPage(output, out var page))
+        {
+            state.Page = page;
+        }
+    }
+
+    private static bool TryExtractPage(JsonElement output, out PipelinePageState? page)
+    {
+        page = null;
+        if (!output.TryGetProperty("page", out var pageElement) ||
+            pageElement.ValueKind != JsonValueKind.Object ||
+            !pageElement.TryGetProperty("returnedCount", out var returnedCountElement) ||
+            !returnedCountElement.TryGetInt32(out var returnedCount) ||
+            returnedCount < 0 ||
+            !pageElement.TryGetProperty("hasMore", out var hasMoreElement) ||
+            hasMoreElement.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+        {
+            return false;
+        }
+
+        var hasMore = hasMoreElement.GetBoolean();
+        int? nextOffset = null;
+        if (hasMore)
+        {
+            if (!pageElement.TryGetProperty("nextOffset", out var nextOffsetElement) ||
+                !nextOffsetElement.TryGetInt32(out var parsedOffset) ||
+                parsedOffset < 0)
+            {
+                return false;
+            }
+
+            nextOffset = parsedOffset;
+        }
+
+        page = new PipelinePageState(returnedCount, hasMore, nextOffset);
+        return true;
     }
 
     private static IReadOnlyList<ToolCheckResult>? ExtractChecks(JsonElement? output)
@@ -375,9 +428,9 @@ public sealed class ToolPipelineRunner : IToolPipelineRunner
         return results.Count == 0 ? null : results;
     }
 
-    private static string BuildStageInput(string canonicalInputJson, JsonElement? snapshotOutput)
+    private static string BuildStageInput(ToolPipelineRequest request, JsonElement? snapshotOutput)
     {
-        using var inputDocument = JsonDocument.Parse(canonicalInputJson);
+        using var inputDocument = JsonDocument.Parse(request.CanonicalInputJson);
         var buffer = new ArrayBufferWriter<byte>();
         using (var writer = new Utf8JsonWriter(buffer))
         {
@@ -392,6 +445,19 @@ public sealed class ToolPipelineRunner : IToolPipelineRunner
             else
             {
                 writer.WriteNullValue();
+            }
+
+            writer.WritePropertyName("pagination");
+            if (request.Pagination is null)
+            {
+                writer.WriteNullValue();
+            }
+            else
+            {
+                writer.WriteStartObject();
+                writer.WriteNumber("pageSize", request.Pagination.PageSize);
+                writer.WriteNumber("offset", request.Pagination.Offset);
+                writer.WriteEndObject();
             }
 
             writer.WriteEndObject();

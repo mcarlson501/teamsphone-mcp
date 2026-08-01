@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using TeamsPhoneMcp.Audit;
 using TeamsPhoneMcp.Core;
 using TeamsPhoneMcp.Host.Auth;
 using TeamsPhoneMcp.Host.Logging;
@@ -46,6 +47,7 @@ public class Program
             .AddTeamsPhoneTools()
             .AddPowerShellStageExecution()
             .AddLocalTenantCredentials();
+        builder.Services.AddTeamsPhoneAudit(builder.Environment);
 
         await builder.Build().RunAsync();
     }
@@ -74,6 +76,7 @@ public class Program
             .AddTeamsPhoneTools()
             .AddPowerShellStageExecution()
             .AddLocalTenantCredentials();
+        builder.Services.AddTeamsPhoneAudit(builder.Environment);
 
         var app = builder.Build();
 

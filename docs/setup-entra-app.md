@@ -45,6 +45,11 @@ in **application** mode. That requires both an API permission and a directory ro
    - `Organization.Read.All`
 4. Select **Add permissions**, then **Grant admin consent for &lt;tenant&gt;**.
 
+> The Phase A read tools (phone numbers, call queues, auto attendants, licensing,
+> emergency addresses, voice policies, resource accounts, schedules, and the tenant
+> snapshot) use **Teams PowerShell cmdlets only** — they add no further Graph
+> permissions beyond the two above.
+
 ### 2b. Teams admin role
 
 App-only Teams cmdlets require the app's service principal to hold a Teams admin role.

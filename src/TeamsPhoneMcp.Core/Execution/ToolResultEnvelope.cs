@@ -49,7 +49,12 @@ public sealed record ToolResultEnvelope
 
     public ToolTimings? Timings { get; init; }
 
+    public ToolPagination? Pagination { get; init; }
+
     public ToolError? Error { get; init; }
+
+    [JsonIgnore]
+    internal int? NextOffset { get; init; }
 }
 
 /// <summary>Before/after tenant state captured from snapshot and result stages.</summary>
@@ -60,6 +65,13 @@ public sealed record ToolCheckResult(string Check, bool Passed, string? Detail);
 
 /// <summary>Per-stage and total wall-clock timings in milliseconds.</summary>
 public sealed record ToolTimings(long TotalMs, IReadOnlyDictionary<string, long> Stages);
+
+/// <summary>Paging metadata for collection reads; continuation tokens are host-issued.</summary>
+public sealed record ToolPagination(
+    int PageSize,
+    int ReturnedCount,
+    bool HasMore,
+    string? ContinuationToken);
 
 /// <summary>Sanitized error surfaced to the client.</summary>
 public sealed record ToolError(string Code, string Message);

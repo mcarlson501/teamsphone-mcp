@@ -1,0 +1,19 @@
+id: list-resource-accounts
+version: 1.0.0
+summary: List Teams resource accounts (application instances) with their assigned phone number, application type, and the call queue or auto attendant each one is associated with.
+category: read
+riskTier: 0
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  applicationType: { type: string, required: false, allowedValues: [callQueue, autoAttendant, all] }
+  pageSize: { type: integer, required: false, minimum: 1, maximum: 200 }
+  continuationToken: { type: string, required: false }
+redactParams: []
+maxBlastRadius: 0
+timeoutSeconds: 180

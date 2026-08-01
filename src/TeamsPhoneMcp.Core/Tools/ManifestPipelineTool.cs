@@ -25,17 +25,8 @@ namespace TeamsPhoneMcp.Core.Tools;
 /// </remarks>
 public sealed class ManifestPipelineTool : McpServerTool
 {
-    private static readonly HashSet<string> ReservedArguments = new(StringComparer.Ordinal)
-    {
-        "tenantId",
-        "credentialRef",
-        "dryRun",
-        "whatIf",
-        "confirmationToken",
-        "blastRadius",
-        "allowTier3",
-        "maxRiskTier",
-    };
+    private static readonly HashSet<string> ReservedArguments =
+        new(ReservedToolArguments.Names, StringComparer.Ordinal);
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -64,7 +55,10 @@ public sealed class ManifestPipelineTool : McpServerTool
         var manifestCatalog = services.GetRequiredService<IToolManifestCatalog>();
         var manifest = manifestCatalog.GetRequired(_manifest.Id);
 
-        var arguments = request.Params?.Arguments;
+        var arguments = request.Params?.Arguments?.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value,
+            StringComparer.Ordinal) ?? new Dictionary<string, JsonElement>(StringComparer.Ordinal);
         ToolArgumentValidator.Validate(manifest, arguments);
 
         var reader = new ArgumentReader(arguments, manifest.Id);
@@ -74,19 +68,55 @@ public sealed class ManifestPipelineTool : McpServerTool
 
         var correlationId = Guid.NewGuid().ToString();
         var serverMode = ServerModeCeiling.Resolve(services);
+        var timeProvider = services.GetService<TimeProvider>() ?? TimeProvider.System;
+
+        // Every exit path below writes exactly one audit record (build spec §9.1).
+        var auditRecorder = services.GetService<IToolAuditRecorder>();
+        var auditContext = new ToolAuditContext(
+            manifest,
+            correlationId,
+            tenantId.ToString(),
+            businessParameters,
+            Simulated: serverMode == ServerModeCeiling.Mode.WhatIf)
+        {
+            SessionId = request.Server?.SessionId,
+            ClientId = DescribeClient(request),
+        };
+
+        var paginationResolver = services.GetRequiredService<ToolPaginationResolver>();
+        var pagination = paginationResolver.Resolve(
+            manifest,
+            tenantId.ToString(),
+            arguments,
+            businessParameters,
+            timeProvider.GetUtcNow());
+        if (!pagination.IsValid)
+        {
+            return await FailureResultAsync(
+                manifest,
+                tenantId,
+                correlationId,
+                pagination.ErrorCode ?? "invalidPagination",
+                "The pagination request is invalid or expired.",
+                auditRecorder,
+                auditContext,
+                cancellationToken).ConfigureAwait(false);
+        }
 
         if (serverMode == ServerModeCeiling.Mode.ReadOnly && manifest.RiskTier > 0)
         {
-            return FailureResult(
+            return await FailureResultAsync(
                 manifest,
                 tenantId,
                 correlationId,
                 "readOnlyMode",
-                "The server is running in read-only mode; this tool is not available.");
+                "The server is running in read-only mode; this tool is not available.",
+                auditRecorder,
+                auditContext,
+                cancellationToken).ConfigureAwait(false);
         }
 
         var policyEngine = services.GetRequiredService<WritePolicyEngine>();
-        var timeProvider = services.GetService<TimeProvider>() ?? TimeProvider.System;
 
         var decision = policyEngine.Evaluate(
             manifest,
@@ -108,10 +138,48 @@ public sealed class ManifestPipelineTool : McpServerTool
             businessParameters.GetRawText(),
             new TenantSessionContext(tenantId, credentialRef),
             decision,
-            correlationId);
+            correlationId)
+        {
+            Pagination = pagination.Pagination
+        };
 
         var envelope = await runner.ExecuteAsync(pipelineRequest, cancellationToken).ConfigureAwait(false);
+        if (envelope.Status == ToolExecutionStatus.Succeeded &&
+            envelope.Pagination is { HasMore: true } page &&
+            envelope.NextOffset.HasValue)
+        {
+            var continuationToken = paginationResolver.IssueContinuationToken(
+                manifest,
+                tenantId.ToString(),
+                businessParameters,
+                envelope.NextOffset.Value,
+                timeProvider.GetUtcNow());
+            envelope = envelope with
+            {
+                Pagination = page with { ContinuationToken = continuationToken }
+            };
+        }
+
+        if (auditRecorder is not null)
+        {
+            await auditRecorder.RecordAsync(auditContext, envelope, cancellationToken).ConfigureAwait(false);
+        }
+
         return ToCallToolResult(envelope);
+    }
+
+    /// <summary>Best-effort client attribution; absent on transports that do not report it.</summary>
+    private static string? DescribeClient(RequestContext<CallToolRequestParams> request)
+    {
+        var clientInfo = request.Server?.ClientInfo;
+        if (clientInfo is null)
+        {
+            return null;
+        }
+
+        return string.IsNullOrWhiteSpace(clientInfo.Version)
+            ? clientInfo.Name
+            : $"{clientInfo.Name}/{clientInfo.Version}";
     }
 
     private static Tool BuildProtocolTool(ToolManifest manifest)
@@ -125,6 +193,27 @@ public sealed class ManifestPipelineTool : McpServerTool
             if (!string.IsNullOrWhiteSpace(input.Format))
             {
                 schema["format"] = input.Format;
+            }
+
+            if (input.AllowedValues is not null)
+            {
+                var allowedValues = new JsonArray();
+                foreach (var value in input.AllowedValues)
+                {
+                    allowedValues.Add(value);
+                }
+
+                schema["enum"] = allowedValues;
+            }
+
+            if (input.Minimum.HasValue)
+            {
+                schema["minimum"] = input.Minimum.Value;
+            }
+
+            if (input.Maximum.HasValue)
+            {
+                schema["maximum"] = input.Maximum.Value;
             }
 
             properties[name] = schema;
@@ -196,12 +285,15 @@ public sealed class ManifestPipelineTool : McpServerTool
         return JsonSerializer.SerializeToElement(node, SerializerOptions);
     }
 
-    private CallToolResult FailureResult(
+    private static async ValueTask<CallToolResult> FailureResultAsync(
         ToolManifest manifest,
         Guid tenantId,
         string correlationId,
         string errorCode,
-        string message)
+        string message,
+        IToolAuditRecorder? auditRecorder,
+        ToolAuditContext auditContext,
+        CancellationToken cancellationToken)
     {
         var envelope = new ToolResultEnvelope
         {
@@ -214,6 +306,11 @@ public sealed class ManifestPipelineTool : McpServerTool
             Summary = message,
             Error = new ToolError(errorCode, message),
         };
+
+        if (auditRecorder is not null)
+        {
+            await auditRecorder.RecordAsync(auditContext, envelope, cancellationToken).ConfigureAwait(false);
+        }
 
         return ToCallToolResult(envelope);
     }

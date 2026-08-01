@@ -264,6 +264,113 @@ public sealed class ToolManifestCatalog : IToolManifestCatalog
             {
                 throw new InvalidOperationException($"Manifest '{manifestPath}' input '{inputName}' has unsupported format '{input.Format}'.");
             }
+
+            ValidateInputConstraints(inputName, input, manifestPath);
+        }
+
+        ValidatePaginationContract(manifest, manifestPath);
+
+        var duplicateRedactParams = manifest.RedactParams
+            .GroupBy(name => name, StringComparer.Ordinal)
+            .FirstOrDefault(group => group.Count() > 1);
+        if (duplicateRedactParams is not null)
+        {
+            throw new InvalidOperationException(
+                $"Manifest '{manifestPath}' redactParams contains duplicate entry '{duplicateRedactParams.Key}'.");
+        }
+
+        foreach (var redactParam in manifest.RedactParams)
+        {
+            if (string.IsNullOrWhiteSpace(redactParam) || !manifest.Inputs.ContainsKey(redactParam))
+            {
+                throw new InvalidOperationException(
+                    $"Manifest '{manifestPath}' redactParams entry '{redactParam}' does not match an input.");
+            }
+        }
+    }
+
+    private static void ValidateInputConstraints(
+        string inputName,
+        ToolManifestInput input,
+        string manifestPath)
+    {
+        if (input.AllowedValues is not null)
+        {
+            if (!string.Equals(input.Type, "string", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Manifest '{manifestPath}' input '{inputName}' allowedValues can only be used with string inputs.");
+            }
+
+            if (input.AllowedValues.Count == 0 ||
+                input.AllowedValues.Any(string.IsNullOrWhiteSpace) ||
+                input.AllowedValues.Distinct(StringComparer.Ordinal).Count() != input.AllowedValues.Count)
+            {
+                throw new InvalidOperationException(
+                    $"Manifest '{manifestPath}' input '{inputName}' allowedValues must contain unique, non-empty values.");
+            }
+        }
+
+        if (input.Minimum is null && input.Maximum is null)
+        {
+            return;
+        }
+
+        if (input.Type is not ("integer" or "number"))
+        {
+            throw new InvalidOperationException(
+                $"Manifest '{manifestPath}' input '{inputName}' numeric bounds require an integer or number input.");
+        }
+
+        if (input.Type == "integer" &&
+            ((input.Minimum.HasValue && decimal.Truncate(input.Minimum.Value) != input.Minimum.Value) ||
+             (input.Maximum.HasValue && decimal.Truncate(input.Maximum.Value) != input.Maximum.Value)))
+        {
+            throw new InvalidOperationException(
+                $"Manifest '{manifestPath}' input '{inputName}' integer bounds must be whole numbers.");
+        }
+
+        if (input.Minimum > input.Maximum)
+        {
+            throw new InvalidOperationException(
+                $"Manifest '{manifestPath}' input '{inputName}' minimum cannot exceed maximum.");
+        }
+    }
+
+    private static void ValidatePaginationContract(ToolManifest manifest, string manifestPath)
+    {
+        var hasPageSize = manifest.Inputs.TryGetValue("pageSize", out var pageSize);
+        var hasContinuationToken = manifest.Inputs.TryGetValue("continuationToken", out var continuationToken);
+        if (!hasPageSize && !hasContinuationToken)
+        {
+            return;
+        }
+
+        if (!hasPageSize || !hasContinuationToken)
+        {
+            throw new InvalidOperationException(
+                $"Manifest '{manifestPath}' paged tools must declare both pageSize and continuationToken inputs.");
+        }
+
+        if (manifest.RiskTier != 0)
+        {
+            throw new InvalidOperationException(
+                $"Manifest '{manifestPath}' pagination is only supported for read tools.");
+        }
+
+        if (pageSize!.Type != "integer" || pageSize.Required || pageSize.Minimum != 1 || pageSize.Maximum != 200)
+        {
+            throw new InvalidOperationException(
+                $"Manifest '{manifestPath}' pageSize must be an optional integer between 1 and 200.");
+        }
+
+        if (continuationToken!.Type != "string" || continuationToken.Required ||
+            continuationToken.AllowedValues is not null ||
+            continuationToken.Minimum is not null ||
+            continuationToken.Maximum is not null)
+        {
+            throw new InvalidOperationException(
+                $"Manifest '{manifestPath}' continuationToken must be an unconstrained optional string.");
         }
     }
 

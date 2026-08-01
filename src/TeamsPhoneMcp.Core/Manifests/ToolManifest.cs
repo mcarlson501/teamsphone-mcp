@@ -20,6 +20,8 @@ public sealed record ToolManifest
 
     public required Dictionary<string, ToolManifestInput> Inputs { get; init; }
 
+    public List<string> RedactParams { get; init; } = [];
+
     public int MaxBlastRadius { get; init; }
 
     public int TimeoutSeconds { get; init; }
@@ -36,6 +38,15 @@ public sealed record ToolManifestInput
 
     [JsonPropertyName("required")]
     public bool Required { get; init; }
+
+    [JsonPropertyName("allowedValues")]
+    public List<string>? AllowedValues { get; init; }
+
+    [JsonPropertyName("minimum")]
+    public decimal? Minimum { get; init; }
+
+    [JsonPropertyName("maximum")]
+    public decimal? Maximum { get; init; }
 }
 
 public sealed record ToolManifestAnnotations

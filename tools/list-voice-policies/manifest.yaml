@@ -1,0 +1,17 @@
+id: list-voice-policies
+version: 1.0.0
+summary: Enumerate the tenant's voice-relevant policies (online voice routing policies, tenant dial plans, Teams calling policies, and voicemail policies) with the settings that drive call behaviour.
+category: read
+riskTier: 0
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  policyType: { type: string, required: false, allowedValues: [routing, dialPlan, calling, voicemail, all] }
+redactParams: []
+maxBlastRadius: 0
+timeoutSeconds: 180

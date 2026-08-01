@@ -104,6 +104,41 @@ public class ToolArgumentValidatorTests
         Assert.DoesNotContain(upn, exception.Message);
     }
 
+    [Fact]
+    public void Validate_RejectsStringOutsideAllowedValues()
+    {
+        var arguments = ParseArguments("""
+            {
+              "targetUserUpn": "user@example.com",
+              "assignmentStatus": "unexpected"
+            }
+            """);
+
+        var exception = Assert.Throws<McpException>(
+            () => ToolArgumentValidator.Validate(CreateManifest(), arguments));
+
+        Assert.Contains("argument 'assignmentStatus' must be one of: assigned, unassigned, all", exception.Message);
+        Assert.DoesNotContain("unexpected", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(201)]
+    public void Validate_RejectsIntegerOutsideBounds(int pageSize)
+    {
+        var arguments = ParseArguments($$"""
+            {
+              "targetUserUpn": "user@example.com",
+              "pageSize": {{pageSize}}
+            }
+            """);
+
+        var exception = Assert.Throws<McpException>(
+            () => ToolArgumentValidator.Validate(CreateManifest(), arguments));
+
+        Assert.Contains("argument 'pageSize' must be between 1 and 200", exception.Message);
+    }
+
     private static IReadOnlyDictionary<string, JsonElement> ParseArguments(string json)
     {
         using var document = JsonDocument.Parse(json);
@@ -125,7 +160,20 @@ public class ToolArgumentValidatorTests
             ["blastRadius"] = new() { Type = "integer", Required = false },
             ["dryRun"] = new() { Type = "boolean", Required = false },
             ["comment"] = new() { Type = "string", Required = false },
-            ["score"] = new() { Type = "number", Required = false }
+            ["score"] = new() { Type = "number", Required = false },
+            ["assignmentStatus"] = new()
+            {
+                Type = "string",
+                Required = false,
+                AllowedValues = ["assigned", "unassigned", "all"]
+            },
+            ["pageSize"] = new()
+            {
+                Type = "integer",
+                Required = false,
+                Minimum = 1,
+                Maximum = 200
+            }
         },
         MaxBlastRadius = 1,
         TimeoutSeconds = 30

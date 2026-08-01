@@ -10,5 +10,10 @@ annotations:
   idempotentHint: true
 inputs:
   tenantId: { type: string, required: true }
+  # Optional constraints: allowedValues for strings; minimum/maximum for numbers.
+  # pageSize: { type: integer, required: false, minimum: 1, maximum: 200 }
+  # continuationToken: { type: string, required: false }
+# List exact top-level input names whose audit values must be replaced.
+redactParams: []
 maxBlastRadius: 1
 timeoutSeconds: 300

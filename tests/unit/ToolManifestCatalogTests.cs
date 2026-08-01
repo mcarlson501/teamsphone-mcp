@@ -225,6 +225,91 @@ public class ToolManifestCatalogTests
         Assert.Contains("unsupported format 'phone'", exception.Message);
     }
 
+    [Fact]
+    public void Catalog_LoadsInputConstraintsAndRedactedParams()
+    {
+        var yaml = CreateReadManifest("constrained-tool")
+            .Replace(
+                "    required: false",
+                "    required: false\n    allowedValues: [assigned, unassigned]\n  batchSize:\n    type: integer\n    required: false\n    minimum: 1\n    maximum: 200",
+                StringComparison.Ordinal)
+            .Replace("maxBlastRadius: 0", "redactParams: [target]\nmaxBlastRadius: 0", StringComparison.Ordinal);
+
+        var manifest = LoadSingleManifest("constrained-tool", yaml);
+
+        Assert.Equal(["assigned", "unassigned"], manifest.Inputs["target"].AllowedValues);
+        Assert.Equal(1, manifest.Inputs["batchSize"].Minimum);
+        Assert.Equal(200, manifest.Inputs["batchSize"].Maximum);
+        Assert.Equal(["target"], manifest.RedactParams);
+    }
+
+    [Fact]
+    public void Catalog_RejectsManifest_WhenAllowedValuesAreDeclaredForNonStringInput()
+    {
+        var yaml = CreateReadManifest("bad-allowed-values")
+            .Replace(
+                "    type: string\n    required: false",
+                "    type: integer\n    required: false\n    allowedValues: [one, two]",
+                StringComparison.Ordinal);
+
+        var exception = AssertInvalidManifest("bad-allowed-values", yaml);
+
+        Assert.Contains("allowedValues can only be used with string inputs", exception.Message);
+    }
+
+    [Fact]
+    public void Catalog_RejectsManifest_WhenNumericBoundsAreInvalid()
+    {
+        var yaml = CreateReadManifest("bad-bounds")
+            .Replace(
+                "    type: string\n    required: false",
+                "    type: integer\n    required: false\n    minimum: 200\n    maximum: 1",
+                StringComparison.Ordinal);
+
+        var exception = AssertInvalidManifest("bad-bounds", yaml);
+
+        Assert.Contains("minimum cannot exceed maximum", exception.Message);
+    }
+
+    [Fact]
+    public void Catalog_RejectsManifest_WhenRedactedParamIsNotAnInput()
+    {
+        var yaml = CreateReadManifest("bad-redaction")
+            .Replace("maxBlastRadius: 0", "redactParams: [secret]\nmaxBlastRadius: 0", StringComparison.Ordinal);
+
+        var exception = AssertInvalidManifest("bad-redaction", yaml);
+
+        Assert.Contains("redactParams entry 'secret' does not match an input", exception.Message);
+    }
+
+    [Fact]
+    public void Catalog_RejectsManifest_WhenPaginationInputsAreNotDeclaredTogether()
+    {
+        var yaml = CreateReadManifest("incomplete-pagination")
+            .Replace(
+                "maxBlastRadius: 0",
+                "  pageSize:\n    type: integer\n    required: false\n    minimum: 1\n    maximum: 200\nmaxBlastRadius: 0",
+                StringComparison.Ordinal);
+
+        var exception = AssertInvalidManifest("incomplete-pagination", yaml);
+
+        Assert.Contains("must declare both pageSize and continuationToken", exception.Message);
+    }
+
+    [Fact]
+    public void Catalog_RejectsManifest_WhenPageSizeDoesNotUseStandardBounds()
+    {
+        var yaml = CreateReadManifest("bad-page-size")
+            .Replace(
+                "maxBlastRadius: 0",
+                "  pageSize:\n    type: integer\n    required: false\n    minimum: 1\n    maximum: 500\n  continuationToken: { type: string, required: false }\nmaxBlastRadius: 0",
+                StringComparison.Ordinal);
+
+        var exception = AssertInvalidManifest("bad-page-size", yaml);
+
+        Assert.Contains("pageSize must be an optional integer between 1 and 200", exception.Message);
+    }
+
     private static ToolManifest LoadSingleManifest(string toolId, string yaml)
     {
         var tempRoot = CreateManifestDirectory(toolId, yaml);

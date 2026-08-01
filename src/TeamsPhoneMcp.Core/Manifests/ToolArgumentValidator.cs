@@ -58,12 +58,50 @@ public static class ToolArgumentValidator
             {
                 validationErrors.Add($"argument '{inputName}' must be a valid UPN");
             }
+
+            if (input.AllowedValues is not null &&
+                !input.AllowedValues.Contains(value.GetString()!, StringComparer.Ordinal))
+            {
+                validationErrors.Add(
+                    $"argument '{inputName}' must be one of: {string.Join(", ", input.AllowedValues)}");
+            }
+
+            ValidateNumericBounds(inputName, input, value, validationErrors);
         }
 
         if (validationErrors.Count > 0)
         {
             throw new McpException(
                 $"Tool '{manifest.Id}' arguments are invalid: {string.Join("; ", validationErrors)}.");
+        }
+    }
+
+    private static void ValidateNumericBounds(
+        string inputName,
+        ToolManifestInput input,
+        JsonElement value,
+        ICollection<string> validationErrors)
+    {
+        if ((input.Minimum is null && input.Maximum is null) ||
+            value.ValueKind != JsonValueKind.Number ||
+            !value.TryGetDecimal(out var numericValue))
+        {
+            return;
+        }
+
+        if (input.Minimum.HasValue && input.Maximum.HasValue &&
+            (numericValue < input.Minimum.Value || numericValue > input.Maximum.Value))
+        {
+            validationErrors.Add(
+                $"argument '{inputName}' must be between {input.Minimum.Value} and {input.Maximum.Value}");
+        }
+        else if (input.Minimum.HasValue && numericValue < input.Minimum.Value)
+        {
+            validationErrors.Add($"argument '{inputName}' must be at least {input.Minimum.Value}");
+        }
+        else if (input.Maximum.HasValue && numericValue > input.Maximum.Value)
+        {
+            validationErrors.Add($"argument '{inputName}' must be at most {input.Maximum.Value}");
         }
     }
 

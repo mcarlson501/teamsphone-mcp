@@ -3,10 +3,10 @@
 [![CI](https://github.com/mcarlson501/teamsphone-mcp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mcarlson501/teamsphone-mcp/actions/workflows/ci.yml)
 
 > [!WARNING]
-> **Experimental and not ready for production use.** Do not connect this project to
-> a live Microsoft 365 tenant or rely on it to make real Teams Phone changes. The
-> current M1 implementation exposes only diagnostic and mock tools; Microsoft Teams,
-> Microsoft Graph, credentials, and PowerShell execution are not implemented yet.
+> **Experimental and not ready for production use.** Do not rely on this project to
+> make real Teams Phone changes. It can now connect to a Microsoft 365 tenant with
+> your own Entra application and certificate, but interfaces, manifests, and audit
+> formats are still changing.
 
 `teamsphone-mcp` is an experimental, open-source **Model Context Protocol (MCP)
 server** for building safe, deterministic Microsoft Teams Phone administration
@@ -15,12 +15,11 @@ tools. The long-term goal is to expose enumerated Move / Add / Change / Delete
 execution.
 
 The repository is tenant-agnostic and contains no customer data or baked-in
-credentials. The current code does not accept tenant credentials or connect to
-Microsoft 365.
+credentials. Tenant credentials are supplied entirely through local configuration.
 
-> **Project status:** Milestone M1 is complete and M2 is in progress. Interfaces,
-> manifests, and configuration may change without backward compatibility before the
-> first release.
+> **Project status:** Milestones M1 and M2 are complete and M3 (Phase A reads plus the
+> audit foundation) is in progress. Interfaces, manifests, and configuration may change
+> without backward compatibility before the first release.
 
 ## What works today
 
@@ -32,26 +31,45 @@ Microsoft 365.
 - An offline-tested tenant session manager with immutable tenant/credential context,
   read/write coordination, idle expiry, LRU eviction, and fatal-session replacement.
 - A read-only `ping` tool and `mock-write-user-policy` safety-flow demonstration.
+- Ten Phase A read-only Teams Phone tools, each with its own Pester suite.
+- A local JSONL audit trail with parameter redaction, correlation ids, snapshot
+  storage, and a retention sweeper — see [`docs/audit.md`](./docs/audit.md).
 - Release build and test coverage in GitHub Actions.
 
 ## Not implemented yet
 
-- Connections to Microsoft Teams, Microsoft Graph, or any Microsoft 365 tenant.
-- Credential providers, certificate authentication, or secret storage.
-- PowerShell runspaces, live tenant connections, credential loading, or real
-   telephony tools.
-- Audit storage, the full staged execution pipeline, container packaging, or a
-   supported release artifact.
+- Write tools beyond the `mock-write-user-policy` demonstration.
+- Container packaging or a supported release artifact.
+- Hash-chained audit records and OpenTelemetry export (planned post-v1).
 
 See [`teamsphone-mcp-build-spec`](./teamsphone-mcp-build-spec) for the milestone
 roadmap. Issues and focused contributions are welcome; review
 [`CONTRIBUTING.md`](./CONTRIBUTING.md) before proposing implementation work.
+
+## Phase A tools (read-only, tier 0)
+
+| Tool | What it returns |
+| ---- | --------------- |
+| `get-user-voice-config` | A user's voice configuration — the **reference implementation** for new tools |
+| `get-tenant-voice-snapshot` | Composite overview: numbers, resource accounts, call queues, auto attendants, emergency locations, schedules, policy counts |
+| `list-phone-numbers` | Tenant phone numbers with assignment state (paged) |
+| `get-callqueue-config` | One call queue's routing, agents, and overflow/timeout handling |
+| `get-autoattendant-config` | One auto attendant's call flows, menus, and targets |
+| `check-user-licensing` | Voice-relevant license and feature plan state for a user |
+| `list-emergency-addresses` | Emergency locations and validation state (paged) |
+| `list-voice-policies` | Voice routing, dial plan, calling, and voicemail policies |
+| `list-resource-accounts` | Resource accounts and what they are attached to (paged) |
+| `get-schedules` | Schedules and the auto attendants referencing them (paged) |
+
+Each tool is a `manifest.yaml` + `run.ps1` pair under [`tools/`](./tools) with its own
+Pester suite; adding a tool never requires editing the host engine.
 
 ## Layout
 
 ```
 src/TeamsPhoneMcp.Host/   ASP.NET Core entrypoint, transports, auth + logging middleware
 src/TeamsPhoneMcp.Core/   Tools, strict manifest catalog, and policy boundary
+src/TeamsPhoneMcp.Audit/  JSONL audit sink, redaction, snapshots, retention sweeper
 tools/                    One validated manifest per exposed tool
 tests/unit/               xUnit unit and host-level MCP acceptance tests
 ```
@@ -91,6 +109,7 @@ The host selects its transport from the command line / environment:
 | Session idle timeout           | `TenantSessions__IdleTimeout` (or `TenantSessions:IdleTimeout`) | Inactive session lifetime; default `00:10:00` |
 | Maximum tenant sessions        | `TenantSessions__MaxSessions` (or `TenantSessions:MaxSessions`) | Live session cap; default `10` |
 | Session cleanup interval       | `TenantSessions__CleanupInterval` (or `TenantSessions:CleanupInterval`) | Idle-session scan interval; default `00:01:00` |
+| Audit trail                    | `Audit__Enabled`, `Audit__RootPath`, `Audit__RetentionDays`, `Audit__SweepIntervalHours` | JSONL audit storage; see [`docs/audit.md`](./docs/audit.md) |
 | Transport = stdio              | `TEAMSPHONE_MCP_STDIO=true` (or `--stdio`)    | Use stdio instead of HTTP                 |
 | HTTP bind address              | `ASPNETCORE_URLS`                             | e.g. `http://127.0.0.1:5199`              |
 
@@ -160,11 +179,9 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:5199/mcp \
 
 ## Next milestone
 
-M1 intentionally keeps C# handlers as the invocation source. M2's offline session
-foundation is now in progress; the default session factory fails closed until a real
-credential and PowerShell adapter is implemented. Dynamic PowerShell dispatch,
-connected runspaces, the stage pipeline, audit storage, server mode ceilings, Docker
-packaging, and real Teams tools remain M2 or later work.
+M3 delivers the Phase A read tools and the audit foundation. Write (MACD) tools with
+preflight/verify stages, server mode ceilings, Docker packaging, and a supported
+release artifact remain M4 or later work.
 
 ## License
 

@@ -15,6 +15,8 @@ internal sealed class PipelineExecutionState
 
     public IReadOnlyList<ToolCheckResult>? Verification { get; set; }
 
+    public PipelinePageState? Page { get; set; }
+
     public Dictionary<string, long> Timings { get; } = new(StringComparer.Ordinal);
 }
 
@@ -52,6 +54,14 @@ internal static class ResultEnvelopeBuilder
             Preflight = state.Preflight,
             Verification = state.Verification,
             Timings = new ToolTimings(totalMs, state.Timings),
+            Pagination = request.Pagination is null || state.Page is null
+                ? null
+                : new ToolPagination(
+                    request.Pagination.PageSize,
+                    state.Page.ReturnedCount,
+                    state.Page.HasMore,
+                    ContinuationToken: null),
+            NextOffset = state.Page?.NextOffset,
             Error = error
         };
     }
@@ -75,3 +85,5 @@ internal static class ResultEnvelopeBuilder
         _ => "Operation failed."
     };
 }
+
+internal sealed record PipelinePageState(int ReturnedCount, bool HasMore, int? NextOffset);

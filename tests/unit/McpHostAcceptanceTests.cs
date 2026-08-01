@@ -27,7 +27,20 @@ public class McpHostAcceptanceTests : IClassFixture<WebApplicationFactory<Progra
         var tools = await client.ListToolsAsync();
 
         Assert.Equal(
-            ["get-user-voice-config", "mock-write-user-policy", "ping"],
+            [
+                "check-user-licensing",
+                "get-autoattendant-config",
+                "get-callqueue-config",
+                "get-schedules",
+                "get-tenant-voice-snapshot",
+                "get-user-voice-config",
+                "list-emergency-addresses",
+                "list-phone-numbers",
+                "list-resource-accounts",
+                "list-voice-policies",
+                "mock-write-user-policy",
+                "ping"
+            ],
             tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal));
 
         var ping = tools.Single(tool => tool.Name == "ping").ProtocolTool;

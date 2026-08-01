@@ -11,6 +11,7 @@ using TeamsPhoneMcp.Core.Manifests;
 using TeamsPhoneMcp.Core.Policy;
 using TeamsPhoneMcp.Core.Sessions;
 using ModelContextProtocol.Server;
+using TeamsPhoneMcp.Audit;
 using TeamsPhoneMcp.Core.Tools;
 using TeamsPhoneMcp.Credentials;
 
@@ -29,35 +30,16 @@ public static class ToolRegistration
     {
         ArgumentNullException.ThrowIfNull(builder);
 
+        builder.Services.AddSingleton(CreateTokenSigningKey);
         builder.Services.AddSingleton<IConfirmationTokenService>(sp =>
-        {
-            var configuration = sp.GetService<IConfiguration>();
-            var logger = sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ConfirmationTokenService>>();
-            var keyFromConfig =
-                configuration?["TEAMSPHONE_MCP_CONFIRMATION_TOKEN_KEY"] ??
-                configuration?["Policy:ConfirmationTokenKey"];
-
-            if (!string.IsNullOrWhiteSpace(keyFromConfig))
-            {
-                try
-                {
-                    return ConfirmationTokenService.FromBase64Key(keyFromConfig, TimeSpan.FromMinutes(15));
-                }
-                catch (Exception ex) when (ex is FormatException or ArgumentException)
-                {
-                    throw new InvalidOperationException(
-                        "TEAMSPHONE_MCP_CONFIRMATION_TOKEN_KEY / Policy:ConfirmationTokenKey is set but invalid. " +
-                        "Provide a valid Base64-encoded key of at least 32 bytes. " +
-                        "Use ConfirmationTokenService.CreateRandomBase64Key() to generate one.",
-                        ex);
-                }
-            }
-
-            logger.LogWarning(
-                "No persistent confirmation token key configured. Generated an ephemeral key for this process. " +
-                "Set TEAMSPHONE_MCP_CONFIRMATION_TOKEN_KEY to keep confirmation tokens valid across restarts.");
-            return ConfirmationTokenService.FromBase64Key(ConfirmationTokenService.CreateRandomBase64Key(), TimeSpan.FromMinutes(15));
-        });
+            new ConfirmationTokenService(
+                sp.GetRequiredService<TokenSigningKey>().Value,
+                TimeSpan.FromMinutes(15)));
+        builder.Services.AddSingleton<IContinuationTokenService>(sp =>
+            new ContinuationTokenService(
+                sp.GetRequiredService<TokenSigningKey>().Value,
+                TimeSpan.FromMinutes(30)));
+        builder.Services.AddSingleton<ToolPaginationResolver>();
         builder.Services.AddSingleton<WritePolicyEngine>();
         builder.Services.AddSingleton<IToolManifestCatalog>(sp =>
         {
@@ -80,6 +62,12 @@ public static class ToolRegistration
         builder.Services.AddHostedService<TenantSessionCleanupService>();
         builder.Services.TryAddSingleton<IStageExecutor, UnconfiguredStageExecutor>();
         builder.Services.TryAddSingleton<IToolPipelineRunner, ToolPipelineRunner>();
+
+        // Fail-safe audit defaults: the host swaps these for the JSONL pipeline
+        // via AddTeamsPhoneAudit, so unit tests never touch the filesystem.
+        builder.Services.TryAddSingleton<IAuditSink, NullAuditSink>();
+        builder.Services.TryAddSingleton<IAuditSnapshotStore, NullAuditSnapshotStore>();
+        builder.Services.TryAddSingleton<IToolAuditRecorder, ToolAuditRecorder>();
         builder.Services
             .AddOptions<PowerShellTenantConnectionOptions>()
             .BindConfiguration(PowerShellTenantConnectionOptions.SectionName);
@@ -184,6 +172,42 @@ public static class ToolRegistration
             : Path.GetFullPath(configuredPath, env.ContentRootPath);
     }
 
+    private static TokenSigningKey CreateTokenSigningKey(IServiceProvider services)
+    {
+        var configuration = services.GetService<IConfiguration>();
+        var logger = services.GetRequiredService<ILogger<ConfirmationTokenService>>();
+        var keyFromConfig =
+            configuration?["TEAMSPHONE_MCP_CONFIRMATION_TOKEN_KEY"] ??
+            configuration?["Policy:ConfirmationTokenKey"];
+
+        if (!string.IsNullOrWhiteSpace(keyFromConfig))
+        {
+            try
+            {
+                var key = Convert.FromBase64String(keyFromConfig);
+                if (key.Length < 32)
+                {
+                    throw new ArgumentException("Token signing key must be at least 32 bytes.", nameof(keyFromConfig));
+                }
+
+                return new TokenSigningKey(key);
+            }
+            catch (Exception ex) when (ex is FormatException or ArgumentException)
+            {
+                throw new InvalidOperationException(
+                    "TEAMSPHONE_MCP_CONFIRMATION_TOKEN_KEY / Policy:ConfirmationTokenKey is set but invalid. " +
+                    "Provide a valid Base64-encoded key of at least 32 bytes. " +
+                    "Use ConfirmationTokenService.CreateRandomBase64Key() to generate one.",
+                    ex);
+            }
+        }
+
+        logger.LogWarning(
+            "No persistent token signing key configured. Generated an ephemeral key for this process. " +
+            "Set TEAMSPHONE_MCP_CONFIRMATION_TOKEN_KEY to keep signed tokens valid across restarts.");
+        return new TokenSigningKey(Convert.FromBase64String(ConfirmationTokenService.CreateRandomBase64Key()));
+    }
+
     private static McpServerTool CreateManifestValidatedTool<TTool>(string methodName)
     {
         var method = typeof(TTool).GetMethod(
@@ -203,4 +227,6 @@ public static class ToolRegistration
 
         return new ManifestValidatingMcpServerTool(innerTool);
     }
+
+    private sealed record TokenSigningKey(byte[] Value);
 }

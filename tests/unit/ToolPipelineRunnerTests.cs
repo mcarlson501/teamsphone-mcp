@@ -48,6 +48,55 @@ public class ToolPipelineRunnerTests
     }
 
     [Fact]
+    public async Task ReadTool_ThreadsPaginationIntoStageAndReturnsPageMetadata()
+    {
+        string? stageInput = null;
+        var executor = new FakeStageExecutor((request, _) =>
+        {
+            stageInput = request.InputJson;
+            return Task.FromResult(StageExecutionResult.Success(JsonSerializer.SerializeToElement(new
+            {
+                summary = "Retrieved a page.",
+                after = new { items = Array.Empty<object>() },
+                page = new { returnedCount = 75, hasMore = true, nextOffset = 175 }
+            })));
+        });
+        var runner = Runner(executor, new StubSessionManager());
+        var request = Request(ReadManifest(), PolicyDecision.Execute()) with
+        {
+            Pagination = new ToolPipelinePagination(PageSize: 100, Offset: 75)
+        };
+
+        var envelope = await runner.ExecuteAsync(request, CancellationToken.None);
+
+        Assert.NotNull(stageInput);
+        using var inputDocument = JsonDocument.Parse(stageInput!);
+        var paginationInput = inputDocument.RootElement.GetProperty("pagination");
+        Assert.Equal(100, paginationInput.GetProperty("pageSize").GetInt32());
+        Assert.Equal(75, paginationInput.GetProperty("offset").GetInt32());
+        Assert.Equal(100, envelope.Pagination!.PageSize);
+        Assert.Equal(75, envelope.Pagination.ReturnedCount);
+        Assert.True(envelope.Pagination.HasMore);
+        Assert.Null(envelope.Pagination.ContinuationToken);
+    }
+
+    [Fact]
+    public async Task ReadTool_PagedStageWithoutPageMetadata_ReturnsMalformedOutput()
+    {
+        var runner = Runner(new FakeStageExecutor(), new StubSessionManager());
+        var request = Request(ReadManifest(), PolicyDecision.Execute()) with
+        {
+            Pagination = new ToolPipelinePagination(PageSize: 100, Offset: 0)
+        };
+
+        var envelope = await runner.ExecuteAsync(request, CancellationToken.None);
+
+        Assert.Equal(ToolExecutionStatus.Failed, envelope.Status);
+        Assert.Equal(StageErrorCodes.MalformedStageOutput, envelope.Error!.Code);
+        Assert.Null(envelope.Pagination);
+    }
+
+    [Fact]
     public async Task WriteDryRun_RunsSnapshotPreflightDryRun_ReturnsDryRunCompletedWithToken()
     {
         var executor = new FakeStageExecutor();

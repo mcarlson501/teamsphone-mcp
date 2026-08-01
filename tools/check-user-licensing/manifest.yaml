@@ -1,0 +1,17 @@
+id: check-user-licensing
+version: 1.0.0
+summary: Report the Teams Phone licensing state for one user, including Phone System and Calling Plan entitlements, usage location, and the blockers that would prevent enabling enterprise voice.
+category: read
+riskTier: 0
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  userUpn: { type: string, format: upn, required: true }
+redactParams: []
+maxBlastRadius: 0
+timeoutSeconds: 120

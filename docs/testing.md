@@ -6,7 +6,7 @@ each layer is faster and more isolated than the one below it.
 
 | Layer | What it proves | Needs a tenant? | Speed |
 | ----- | -------------- | --------------- | ----- |
-| 1. .NET unit/acceptance tests | Wiring, manifests, policy, fail-closed paths | No | Fast |
+| 1. .NET unit/acceptance tests | Wiring, manifests, policy, audit records, fail-closed paths | No | Fast |
 | 2. PowerShell (Pester) tests | Each tool's `run.ps1` stage logic | No | Fast |
 | 3. Local server smoke test | The host boots, lists tools, enforces auth | No | Seconds |
 | 4. Live end-to-end | A real tool call against your tenant | **Yes** | Slow |
@@ -31,8 +31,9 @@ each layer is faster and more isolated than the one below it.
 ## Layer 1 — .NET unit and acceptance tests
 
 The primary safety net. Covers manifest/schema parity, argument validation, write policy,
-the confirmation-token service, session lifecycle, and the MCP host end to end (including
-the fail-closed path when a credential is not configured).
+the confirmation-token service, pagination and continuation tokens, the audit pipeline,
+session lifecycle, and the MCP host end to end (including the fail-closed path when a
+credential is not configured).
 
 ```bash
 # Build first (warnings are errors — keep it clean).
@@ -53,6 +54,9 @@ dotnet test tests/unit --filter FullyQualifiedName~ListTools_ExposesManifestPari
 
 # Fail-closed check: a manifest tool returns a clean Failed envelope with no secret leak.
 dotnet test tests/unit --filter FullyQualifiedName~CallTool_ManifestPipelineTool_FailsClosedWithoutConfiguredCredential
+
+# Audit trail: redaction, the JSONL sink, retention, and end-to-end record writing.
+dotnet test tests/unit --filter FullyQualifiedName~Audit
 ```
 
 These tests use **no tenant and no credentials** — the fail-closed test deliberately calls
@@ -64,8 +68,9 @@ envelope whose client-facing message contains no credential reference.
 ## Layer 2 — PowerShell (Pester) tests
 
 Each tool ships a `run.Tests.ps1` next to its `run.ps1`. These stub the Teams cmdlets and
-assert the stage logic (execute path, not-found handling, unsupported-stage rejection, and
-the single-JSON-line output contract).
+assert the stage logic (execute path, not-found handling, unsupported-stage rejection, the
+pagination contract for paged tools, and the single-JSON-line output contract). Shared
+helpers in `tools/common/TeamsPhoneMcp.Common.psm1` have their own suite.
 
 ```bash
 # One tool.
@@ -108,8 +113,8 @@ export ASPNETCORE_URLS='http://localhost:5111'
 dotnet run --project src/TeamsPhoneMcp.Host
 ```
 
-On startup you should see `Loaded 3 tool manifests` and `Validated 3 tool manifests against
-3 registered MCP tools`. In another terminal, verify the auth gate:
+On startup you should see `Loaded 12 tool manifests` and `Validated 12 tool manifests
+against 12 registered MCP tools`. In another terminal, verify the auth gate:
 
 ```bash
 # No token → 401.
@@ -126,8 +131,9 @@ curl -s -D - -o /dev/null -X POST http://localhost:5111/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"c","version":"1"}}}'
 ```
 
-If you see `Loaded 2 tool manifests`, you are running a stale build (from before
-`get-user-voice-config`). Rebuild, or run the DLL from the configuration you just built.
+If the manifest count is lower than the number of folders under `tools/` (excluding
+`_template` and `common`), you are running a stale build. Rebuild, or run the DLL from the
+configuration you just built.
 
 ---
 
@@ -172,6 +178,47 @@ ASPNETCORE_ENVIRONMENT=Development \
 A pass means the tool returned a `Succeeded` envelope whose
 `diff.after.userPrincipalName` equals the UPN you queried.
 
+### Option A2 — the full Phase A live verification (M3 sign-off)
+
+`tests/unit/PhaseAIntegrationTests.cs` calls **every Phase A read tool** once against the
+dev tenant, asserts each result envelope, and then asserts that the audit trail recorded
+every call with no credential material. This is the M3 acceptance run. It uses the same
+gating variables and also skips cleanly when they are unset.
+
+Keep tenant values out of tracked files — put them in a gitignored `.env.integration` and
+supply the credential itself through environment variables rather than editing
+`appsettings.Development.json`:
+
+```bash
+# .env.integration  (gitignored — never commit real tenant values)
+TEAMSPHONE_MCP_DEV_PFX_PASSWORD='<your pfx export password>'
+
+Credentials__dev-tenant__TenantId='<directory tenant id>'
+Credentials__dev-tenant__ClientId='<application (client) id>'
+Credentials__dev-tenant__CertificatePath='/Users/you/.config/teamsphone-mcp/teamsphone-mcp-dev.pfx'
+Credentials__dev-tenant__CertificatePasswordEnvVar='TEAMSPHONE_MCP_DEV_PFX_PASSWORD'
+
+TEAMSPHONE_MCP_IT_TENANT_ID='<directory tenant id>'
+TEAMSPHONE_MCP_IT_CREDENTIAL_REF='dev-tenant'
+TEAMSPHONE_MCP_IT_USER_UPN='<a real user upn in that tenant>'
+
+# Optional — when unset, the test discovers a call queue and an auto attendant from
+# the tenant's resource accounts, and skips whichever object type does not exist.
+TEAMSPHONE_MCP_IT_CALL_QUEUE='<a call queue name or guid>'
+TEAMSPHONE_MCP_IT_AUTO_ATTENDANT='<an auto attendant name or guid>'
+```
+
+```bash
+set -a; source .env.integration; set +a
+ASPNETCORE_ENVIRONMENT=Development \
+  dotnet test tests/unit --filter FullyQualifiedName~PhaseAIntegration -l 'console;verbosity=detailed'
+```
+
+The test prints each tool's `summary` line, so a pass doubles as a readable snapshot of the
+dev tenant. It fails if any tool returns a non-`Succeeded` envelope, if the number of audit
+records does not match the number of calls, or if the audit text matches a private-key,
+thumbprint, or JWT shape.
+
 ### Option B — a real MCP client against the running server
 
 Start the server (stdio per 3a, or HTTP per 3b with a bearer token and the PFX password
@@ -202,11 +249,27 @@ generic and never echoes your `credentialRef` or any secret back to the client.
 
 ---
 
+## Checking the audit trail
+
+Every accepted call — including forced failures — writes one JSONL record under the
+configured audit root. After a Layer 3 or Layer 4 run:
+
+```bash
+find audit -name '*.jsonl' -exec cat {} \; | tail -1 | python3 -m json.tool
+```
+
+The record's `correlationId` matches the one in the client-facing envelope, and
+`parameters` must never contain a secret. See [audit.md](audit.md) for the full schema,
+redaction rules, and retention behaviour.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Likely cause / fix |
 | ------- | ------------------ |
-| `Loaded 2 tool manifests` at startup | Stale build. Rebuild and run the current configuration's DLL. |
+| Fewer manifests loaded than `tools/` folders | Stale build. Rebuild and run the current configuration's DLL. |
+| No files under `audit/` after a call | `Audit:Enabled` is `false`, or the process cannot write to `Audit:RootPath` (check the host's error logs — audit failures never fail the call). |
 | Every `/mcp` request returns `401` | No `TEAMSPHONE_MCP_BEARER_TOKEN` set (HTTP mode). Set one, or use stdio. |
 | `The tenant credential could not be resolved` | Wrong PFX path/password, missing private key, or `CertificatePasswordEnvVar` not exported. Re-run the certificate preflight above. |
 | `credential does not belong to the requested tenant` | The `tenantId` argument doesn't match `TenantId` in the `credentialRef` config entry. |
