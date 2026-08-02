@@ -116,8 +116,8 @@ export ASPNETCORE_URLS='http://localhost:5111'
 dotnet run --project src/TeamsPhoneMcp.Host
 ```
 
-On startup you should see `Loaded 13 tool manifests` and `Validated 13 tool manifests
-against 13 registered MCP tools`. In another terminal, verify the auth gate:
+On startup you should see `Loaded 22 tool manifests` and `Validated 22 tool manifests
+against 22 registered MCP tools`. In another terminal, verify the auth gate:
 
 ```bash
 # No token → 401.
@@ -255,6 +255,33 @@ set -a; source .env.integration; set +a
 > This test **writes to your tenant**. It only ever touches the two users you name, and
 > `maxBlastRadius: 1` prevents it from affecting anything else. Replication lag is
 > absorbed by the verify stage's bounded polling.
+
+### Option A4 — the Phase D composite round trip (M5 sign-off)
+
+`tests/unit/PhaseDIntegrationTests.cs` dry-runs and confirms
+`offboard-voice-user`, then restores the captured state through a dry-run and confirmed
+`onboard-voice-user` call in a `finally` block. It verifies the numbered user and tenant
+inventory match the baseline and that all four write calls were audited.
+
+Use an isolated fixture that meets every prerequisite:
+
+- enterprise voice is enabled and a phone number is assigned;
+- the number has an existing validated emergency location;
+- the user has no direct call queue memberships and no caller ID policy;
+- no other test or administrator changes the fixture during the run.
+
+```bash
+# Optional. Defaults to TEAMSPHONE_MCP_IT_MOVE_SOURCE_UPN when unset.
+TEAMSPHONE_MCP_IT_PHASE_D_USER_UPN='<isolated numbered user>'
+
+set -a; source .env.integration; set +a
+./scripts/live-test.sh --filter FullyQualifiedName~PhaseDIntegrationTests -l 'console;verbosity=detailed'
+```
+
+> This test writes to the tenant twice. Do not use a clean Calling Plan number without
+> an emergency location as the fixture: Calling Plan assignment cannot be restored
+> without one. If restoration fails, preserve the failing envelope and restore from
+> its `diff.before` snapshot before running another live write test.
 
 ### Option B — a real MCP client against the running server
 

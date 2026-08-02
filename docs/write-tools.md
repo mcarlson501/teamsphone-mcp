@@ -3,22 +3,40 @@
 Write tools change tenant state. The host enforces the write-safety protocol from build
 spec §6.4 for every tool with `riskTier >= 1`; a tool script cannot opt out of it.
 
-`move-number-between-users` is the reference implementation: it exercises every stage,
-implements rollback, and is the quality bar for new write tools.
+`move-number-between-users` remains the smallest full-depth reference implementation.
+The Phase D catalog also includes atomic assignment/settings tools and two composites
+that compensate completed child steps in reverse order.
+
+## Phase D catalog
+
+| Tool | Tier | Scope |
+| ---- | ---- | ----- |
+| `assign-phone-number` | 1 | Number, enterprise voice, optional policies and emergency location |
+| `remove-phone-number` | 2 | Number release with rollback metadata |
+| `move-number-between-users` | 2 | Reversible user-to-user number move |
+| `onboard-voice-user` | 2 | Composite onboarding with reverse compensation |
+| `offboard-voice-user` | 2 | Composite offboarding with a disposition report |
+| `update-callqueue-members` | 1 | Direct queue agents |
+| `update-user-calling-policies` | 1 | Existing user policy assignments |
+| `update-user-voicemail-settings` | 1 | Per-user voicemail settings |
+| `set-caller-id-assignment` | 1 | Existing caller ID policy assignment |
+| `update-user-emergency-location` | 2 | Existing validated emergency location |
 
 ## The two-step protocol
 
 1. **Dry run (default).** A call without `dryRun: false` never writes. The host runs
-   `snapshot → preflight → dryrun` and returns `status: dryRunCompleted` with a
+  `snapshot → preflight → dryrun` and returns `status: DryRunCompleted` with a
    `confirmationToken` (HMAC over toolId + canonicalized params + tenantId + expiry,
    15 minute TTL) plus the planned changes in `diff.after`.
 2. **Execute.** Calling again with `dryRun: false` **and** that token runs
    `snapshot → execute → verify`. Any change to the parameters invalidates the token, so
    a changed plan always requires a fresh dry run.
 
-`whatIf` is an accepted alias for `dryRun`. A session opened in what-if mode, or a server
-started with `TEAMSPHONE_MCP_MODE=whatif`, never issues a token at all; `readonly` hides
-tier 1+ tools entirely.
+`whatIf` is an accepted alias for `dryRun`. A session initialized with
+`_meta.whatIfMode: true`, or a server started with `TEAMSPHONE_MCP_MODE=whatif`, forces
+every write call through the dry-run path even when it requests `dryRun: false`. The
+result has `simulated: true` and no confirmation token. `readonly` hides tier 1+ tools
+entirely.
 
 Example (arguments only — transport details are in the README):
 
@@ -73,6 +91,9 @@ from the snapshot belongs in preflight instead. Two that the live run surfaced f
   even though it looks voice-capable;
 - **licence matched to the number type** — a `CallingPlan` number needs a Calling Plan
   licence on the target. `PhoneSystem` alone is not enough.
+- **emergency location** — Calling Plan assignment requires a validated LIS location.
+  Current Teams objects report this as `ValidationStatus: Validated`; older module
+  objects may expose `IsValidated`.
 
 When the tenant reports nothing for a property, prefer passing the check with an
 explanatory `detail` over failing — the write itself still fails closed.
@@ -125,3 +146,8 @@ files are what you restore from if you need to undo the move manually.
 `tests/unit/MoveNumberIntegrationTests.cs` automates both halves against a real tenant —
 the full move (and the move back, so the tenant is left as found) and a preflight-blocked
 ineligible target that issues no token. See [`testing.md`](./testing.md) Layer 4.
+
+`tests/unit/PhaseDIntegrationTests.cs` signs off both composites by offboarding one
+explicitly isolated numbered user and onboarding that user from the captured snapshot
+in a `finally` block. It verifies the original number, emergency location, enterprise
+voice state, and policies are restored. See [`testing.md`](./testing.md) Layer 4.

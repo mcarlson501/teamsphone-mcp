@@ -1,0 +1,40 @@
+id: onboard-voice-user
+version: 1.0.0
+summary: Onboard a voice user by assigning a number, enabling enterprise voice, applying requested policies and voicemail settings, and optionally setting an emergency location.
+category: add
+riskTier: 2
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: false
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  userUpn: { type: string, format: upn, required: true }
+  phoneNumber: { type: string, required: true }
+  onlineVoiceRoutingPolicy: { type: string, required: false }
+  tenantDialPlan: { type: string, required: false }
+  teamsCallingPolicy: { type: string, required: false }
+  callerIdPolicy: { type: string, required: false }
+  voicemailEnabled: { type: boolean, required: false }
+  followAutomaticReplies: { type: boolean, required: false }
+  followCalendarEvents: { type: boolean, required: false }
+  emergencyLocationId: { type: string, required: false }
+  dryRun: { type: boolean, required: false }
+  whatIf: { type: boolean, required: false }
+  confirmationToken: { type: string, required: false }
+  blastRadius: { type: integer, required: false }
+preflight:
+  - phone number assignment preflight passed
+  - caller ID assignment preflight passed
+  - voicemail settings preflight passed
+  - emergency location preflight passed
+verification:
+  - phone number assignment verified
+  - caller ID assignment verified
+  - voicemail settings verified
+  - emergency location assignment verified
+rollback: compensate completed onboarding steps in reverse and restore all captured assignments and settings
+maxBlastRadius: 1
+timeoutSeconds: 600

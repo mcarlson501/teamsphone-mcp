@@ -255,7 +255,7 @@ public sealed class ToolManifestCatalog : IToolManifestCatalog
                 throw new InvalidOperationException($"Manifest '{manifestPath}' has an input with an empty name.");
             }
 
-            if (input is null || !new[] { "string", "integer", "boolean", "number" }.Contains(input.Type, StringComparer.Ordinal))
+            if (input is null || !new[] { "string", "integer", "boolean", "number", "array" }.Contains(input.Type, StringComparer.Ordinal))
             {
                 throw new InvalidOperationException($"Manifest '{manifestPath}' input '{inputName}' has invalid type.");
             }
@@ -294,6 +294,18 @@ public sealed class ToolManifestCatalog : IToolManifestCatalog
         ToolManifestInput input,
         string manifestPath)
     {
+        if (input.Type == "array")
+        {
+            ValidateArrayInput(inputName, input, manifestPath);
+            return;
+        }
+
+        if (input.Items is not null || input.MinItems is not null || input.MaxItems is not null)
+        {
+            throw new InvalidOperationException(
+                $"Manifest '{manifestPath}' input '{inputName}' array constraints require an array input.");
+        }
+
         if (input.AllowedValues is not null)
         {
             if (!string.Equals(input.Type, "string", StringComparison.Ordinal))
@@ -334,6 +346,39 @@ public sealed class ToolManifestCatalog : IToolManifestCatalog
         {
             throw new InvalidOperationException(
                 $"Manifest '{manifestPath}' input '{inputName}' minimum cannot exceed maximum.");
+        }
+    }
+
+    private static void ValidateArrayInput(
+        string inputName,
+        ToolManifestInput input,
+        string manifestPath)
+    {
+        if (input.Format is not null || input.AllowedValues is not null || input.Minimum is not null || input.Maximum is not null)
+        {
+            throw new InvalidOperationException(
+                $"Manifest '{manifestPath}' input '{inputName}' uses scalar constraints on an array input.");
+        }
+
+        if (input.Items is null ||
+            !new[] { "string", "integer", "boolean", "number" }.Contains(input.Items.Type, StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Manifest '{manifestPath}' input '{inputName}' must define scalar array items.");
+        }
+
+        if (input.Items.Format is not null &&
+            (!string.Equals(input.Items.Type, "string", StringComparison.Ordinal) ||
+             !string.Equals(input.Items.Format, "upn", StringComparison.Ordinal)))
+        {
+            throw new InvalidOperationException(
+                $"Manifest '{manifestPath}' input '{inputName}' has unsupported item format '{input.Items.Format}'.");
+        }
+
+        if (input.MinItems is < 0 || input.MaxItems is < 0 || input.MinItems > input.MaxItems)
+        {
+            throw new InvalidOperationException(
+                $"Manifest '{manifestPath}' input '{inputName}' has invalid array bounds.");
         }
     }
 

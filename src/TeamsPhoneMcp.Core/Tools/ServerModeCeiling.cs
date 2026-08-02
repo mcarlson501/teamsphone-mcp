@@ -25,6 +25,11 @@ internal static class ServerModeCeiling
     public static Mode Resolve(IServiceProvider services)
     {
         var configuration = services.GetService<IConfiguration>();
+        return Resolve(configuration);
+    }
+
+    public static Mode Resolve(IConfiguration? configuration)
+    {
         var raw = configuration?["TEAMSPHONE_MCP_MODE"] ?? configuration?["ServerMode"];
 
         return raw?.Trim().ToLowerInvariant() switch

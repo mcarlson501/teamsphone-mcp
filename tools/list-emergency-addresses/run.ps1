@@ -61,7 +61,7 @@ switch ($Stage) {
                 stateOrProvince = [string](Get-PropertyValue -InputObject $location -Name 'StateOrProvince')
                 postalCode      = [string](Get-PropertyValue -InputObject $location -Name 'PostalCode')
                 countryOrRegion = [string](Get-PropertyValue -InputObject $location -Name 'CountryOrRegion')
-                validated       = [bool](Get-PropertyValue -InputObject $location -Name 'IsValidated' -Default $false)
+                validated       = Test-TeamsEmergencyLocationValidated -Location $location
                 elin            = [string](Get-PropertyValue -InputObject $location -Name 'Elin')
             }
         }

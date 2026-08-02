@@ -53,6 +53,12 @@ public static class ToolArgumentValidator
                 continue;
             }
 
+            if (string.Equals(input.Type, "array", StringComparison.Ordinal))
+            {
+                ValidateArray(inputName, input, value, validationErrors);
+                continue;
+            }
+
             if (string.Equals(input.Format, "upn", StringComparison.Ordinal) &&
                 !UpnRegex.IsMatch(value.GetString()!))
             {
@@ -73,6 +79,45 @@ public static class ToolArgumentValidator
         {
             throw new McpException(
                 $"Tool '{manifest.Id}' arguments are invalid: {string.Join("; ", validationErrors)}.");
+        }
+    }
+
+    private static void ValidateArray(
+        string inputName,
+        ToolManifestInput input,
+        JsonElement value,
+        ICollection<string> validationErrors)
+    {
+        var itemCount = value.GetArrayLength();
+        if (input.MinItems.HasValue && itemCount < input.MinItems.Value)
+        {
+            validationErrors.Add($"argument '{inputName}' must contain at least {input.MinItems.Value} items");
+        }
+        if (input.MaxItems.HasValue && itemCount > input.MaxItems.Value)
+        {
+            validationErrors.Add($"argument '{inputName}' must contain at most {input.MaxItems.Value} items");
+        }
+
+        if (input.Items is null)
+        {
+            return;
+        }
+
+        var index = 0;
+        foreach (var item in value.EnumerateArray())
+        {
+            if (!HasExpectedType(item, input.Items.Type))
+            {
+                validationErrors.Add(
+                    $"argument '{inputName}[{index}]' must be {GetExpectedTypeDescription(input.Items.Type)}");
+            }
+            else if (string.Equals(input.Items.Format, "upn", StringComparison.Ordinal) &&
+                     !UpnRegex.IsMatch(item.GetString()!))
+            {
+                validationErrors.Add($"argument '{inputName}[{index}]' must be a valid UPN");
+            }
+
+            index++;
         }
     }
 
@@ -113,6 +158,7 @@ public static class ToolArgumentValidator
             "integer" => value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out _),
             "number" => value.ValueKind == JsonValueKind.Number,
             "boolean" => value.ValueKind is JsonValueKind.True or JsonValueKind.False,
+            "array" => value.ValueKind == JsonValueKind.Array,
             _ => false
         };
     }
@@ -124,6 +170,7 @@ public static class ToolArgumentValidator
             "integer" => "an integer",
             "number" => "a number",
             "boolean" => "a boolean",
+            "array" => "an array",
             _ => $"of type '{expectedType}'"
         };
 }

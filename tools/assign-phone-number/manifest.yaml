@@ -1,0 +1,39 @@
+id: assign-phone-number
+version: 1.0.0
+summary: Assign an unassigned tenant phone number to a licensed user, enable enterprise voice, and optionally apply existing calling policies and a validated emergency location.
+category: add
+riskTier: 1
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: false
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  userUpn: { type: string, format: upn, required: true }
+  phoneNumber: { type: string, required: true }
+  onlineVoiceRoutingPolicy: { type: string, required: false }
+  tenantDialPlan: { type: string, required: false }
+  teamsCallingPolicy: { type: string, required: false }
+  locationId: { type: string, required: false }
+  dryRun: { type: boolean, required: false }
+  whatIf: { type: boolean, required: false }
+  confirmationToken: { type: string, required: false }
+  blastRadius: { type: integer, required: false }
+preflight:
+  - target is a user account
+  - target user has no phone number assigned
+  - the number has a known tenant number type
+  - the number is unassigned
+  - target user is enterprise-voice capable
+  - target user is licensed for the number type
+  - requested policies exist
+  - Calling Plan number has a validated emergency location
+verification:
+  - number assigned to target
+  - target user is enterprise voice enabled
+  - requested policies assigned
+rollback: remove the assigned number and restore enterprise voice and policy assignments from the captured snapshot
+maxBlastRadius: 1
+timeoutSeconds: 300

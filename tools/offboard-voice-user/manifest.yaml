@@ -1,0 +1,31 @@
+id: offboard-voice-user
+version: 1.0.0
+summary: Offboard a voice user by removing direct call queue memberships, releasing the phone number, clearing voice policies, disabling enterprise voice, and reporting disposition.
+category: delete
+riskTier: 2
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: false
+  destructiveHint: true
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  userUpn: { type: string, format: upn, required: true }
+  dryRun: { type: boolean, required: false }
+  whatIf: { type: boolean, required: false }
+  confirmationToken: { type: string, required: false }
+  blastRadius: { type: integer, required: false }
+preflight:
+  - target is a user account
+  - direct call queue memberships captured
+  - assigned number can be released
+  - voice assignments captured for rollback
+verification:
+  - direct call queue memberships removed
+  - phone number released to tenant inventory
+  - voice policy assignments cleared
+  - enterprise voice disabled
+rollback: restore enterprise voice, phone number, voice policies, and direct call queue memberships from the captured snapshot
+maxBlastRadius: 1
+timeoutSeconds: 600

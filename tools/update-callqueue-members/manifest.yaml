@@ -1,0 +1,34 @@
+id: update-callqueue-members
+version: 1.0.0
+summary: Replace the direct user membership of one call queue using existing tenant users.
+category: change
+riskTier: 1
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: false
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  callQueueIdentity: { type: string, required: true }
+  agentUserUpns:
+    type: array
+    required: true
+    items: { type: string, format: upn }
+    minItems: 0
+    maxItems: 50
+  dryRun: { type: boolean, required: false }
+  whatIf: { type: boolean, required: false }
+  confirmationToken: { type: string, required: false }
+  blastRadius: { type: integer, required: false }
+preflight:
+  - requested agents are unique
+  - requested agents exist
+  - requested agents are user accounts
+  - queue uses direct user membership only
+verification:
+  - queue direct user membership matches the requested agents
+rollback: restore the original direct user membership from the captured snapshot
+maxBlastRadius: 1
+timeoutSeconds: 300

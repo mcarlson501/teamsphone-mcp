@@ -1,0 +1,30 @@
+id: update-user-emergency-location
+version: 1.0.0
+summary: Assign an existing validated emergency location to a user's current phone number.
+category: change
+riskTier: 2
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: false
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  userUpn: { type: string, format: upn, required: true }
+  locationId: { type: string, required: true }
+  dryRun: { type: boolean, required: false }
+  whatIf: { type: boolean, required: false }
+  confirmationToken: { type: string, required: false }
+  blastRadius: { type: integer, required: false }
+preflight:
+  - target is a user account with a phone number
+  - tenant inventory assigns the number to the target user
+  - requested emergency location exists
+  - requested emergency location is validated
+  - original emergency location can be restored
+verification:
+  - requested emergency location assigned to the user phone number
+rollback: restore the original emergency location or clear it where the number type supports removal
+maxBlastRadius: 1
+timeoutSeconds: 300

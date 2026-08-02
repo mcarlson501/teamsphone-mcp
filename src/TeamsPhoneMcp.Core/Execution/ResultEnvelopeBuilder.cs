@@ -48,6 +48,7 @@ internal static class ResultEnvelopeBuilder
             TenantId = request.SessionContext.TenantId,
             CorrelationId = request.CorrelationId,
             DryRun = dryRun,
+            Simulated = request.Decision.Simulated,
             ConfirmationToken = confirmationToken,
             Summary = string.IsNullOrWhiteSpace(state.Summary) ? DefaultSummary(status) : state.Summary!,
             Diff = diff,

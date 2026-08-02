@@ -36,6 +36,8 @@ public sealed record ToolResultEnvelope
 
     public required bool DryRun { get; init; }
 
+    public bool Simulated { get; init; }
+
     /// <summary>Present only on <see cref="ToolExecutionStatus.DryRunCompleted"/>.</summary>
     public string? ConfirmationToken { get; init; }
 
