@@ -50,6 +50,20 @@ Describe 'TeamsPhoneMcp.Common' {
         }
     }
 
+    Context 'Test-TeamsEmergencyLocationValidated' {
+        It 'recognizes the current Teams ValidationStatus property' {
+            Test-TeamsEmergencyLocationValidated -Location ([pscustomobject]@{ ValidationStatus = 'Validated' }) | Should -BeTrue
+        }
+
+        It 'rejects a location whose current validation status is not validated' {
+            Test-TeamsEmergencyLocationValidated -Location ([pscustomobject]@{ ValidationStatus = 'NotValidated' }) | Should -BeFalse
+        }
+
+        It 'supports the legacy IsValidated property' {
+            Test-TeamsEmergencyLocationValidated -Location ([pscustomobject]@{ IsValidated = $true }) | Should -BeTrue
+        }
+    }
+
     Context 'Test-IsGuid' {
         It 'recognizes a GUID' {
             Test-IsGuid -Value '3f2504e0-4f89-11d3-9a0c-0305e82c3301' | Should -BeTrue

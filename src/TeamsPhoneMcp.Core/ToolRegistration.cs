@@ -41,6 +41,14 @@ public static class ToolRegistration
                 TimeSpan.FromMinutes(30)));
         builder.Services.AddSingleton<ToolPaginationResolver>();
         builder.Services.AddSingleton<WritePolicyEngine>();
+        builder.Services.AddSingleton<McpSessionPolicyStore>();
+        builder.Services.AddSingleton<IMcpSessionPolicyStore>(services =>
+            services.GetRequiredService<McpSessionPolicyStore>());
+        builder.Services.AddSingleton<McpRequestSessionAccessor>();
+        builder.Services.AddSingleton<IMcpRequestSessionAccessor>(services =>
+            services.GetRequiredService<McpRequestSessionAccessor>());
+        builder.Services.Configure<McpServerOptions>(options =>
+            options.Filters.Message.IncomingFilters.Add(McpSessionPolicyStore.CreateInitializationFilter()));
         builder.Services.AddSingleton<IToolManifestCatalog>(sp =>
         {
             var env = sp.GetRequiredService<IHostEnvironment>();

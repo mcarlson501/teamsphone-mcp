@@ -28,6 +28,7 @@ public class McpHostAcceptanceTests : IClassFixture<WebApplicationFactory<Progra
 
         Assert.Equal(
             [
+                "assign-phone-number",
                 "check-user-licensing",
                 "get-autoattendant-config",
                 "get-callqueue-config",
@@ -40,7 +41,15 @@ public class McpHostAcceptanceTests : IClassFixture<WebApplicationFactory<Progra
                 "list-voice-policies",
                 "mock-write-user-policy",
                 "move-number-between-users",
-                "ping"
+                "offboard-voice-user",
+                "onboard-voice-user",
+                "ping",
+                "remove-phone-number",
+                "set-caller-id-assignment",
+                "update-callqueue-members",
+                "update-user-calling-policies",
+                "update-user-emergency-location",
+                "update-user-voicemail-settings"
             ],
             tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal));
 
@@ -75,6 +84,10 @@ public class McpHostAcceptanceTests : IClassFixture<WebApplicationFactory<Progra
         Assert.True(moveProperties.TryGetProperty("sourceUserUpn", out _));
         Assert.True(moveProperties.TryGetProperty("targetUserUpn", out _));
         Assert.True(moveProperties.TryGetProperty("confirmationToken", out _));
+
+        var removeNumber = tools.Single(tool => tool.Name == "remove-phone-number").ProtocolTool;
+        Assert.True(removeNumber.Annotations?.DestructiveHint);
+        Assert.True(removeNumber.InputSchema.GetProperty("properties").TryGetProperty("phoneNumber", out _));
     }
 
     [Fact]

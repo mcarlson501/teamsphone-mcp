@@ -115,6 +115,25 @@ public class ToolPipelineRunnerTests
     }
 
     [Fact]
+    public async Task WriteSimulation_RunsDryRunWithoutIssuingToken()
+    {
+        var executor = new FakeStageExecutor();
+        var manager = new StubSessionManager();
+        var runner = Runner(executor, manager);
+
+        var envelope = await runner.ExecuteAsync(
+            Request(WriteManifest(riskTier: 1), PolicyDecision.DryRun(token: null, simulated: true)),
+            CancellationToken.None);
+
+        Assert.Equal(ToolExecutionStatus.DryRunCompleted, envelope.Status);
+        Assert.True(envelope.DryRun);
+        Assert.True(envelope.Simulated);
+        Assert.Null(envelope.ConfirmationToken);
+        Assert.Equal([ToolStage.Snapshot, ToolStage.Preflight, ToolStage.DryRun], executor.InvokedStages);
+        Assert.Equal(TenantOperationKind.Read, manager.LastOperationKind);
+    }
+
+    [Fact]
     public async Task WriteDryRun_PreflightFails_ReturnsPreflightFailed_NoToken()
     {
         var executor = new FakeStageExecutor((request, _) => Task.FromResult(request.Stage switch

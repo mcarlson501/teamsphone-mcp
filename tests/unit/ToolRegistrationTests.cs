@@ -26,6 +26,7 @@ public class ToolRegistrationTests
         var names = tools.Select(t => t.ProtocolTool.Name).OrderBy(name => name, StringComparer.Ordinal).ToList();
         Assert.Equal(
             [
+                "assign-phone-number",
                 "check-user-licensing",
                 "get-autoattendant-config",
                 "get-callqueue-config",
@@ -38,7 +39,15 @@ public class ToolRegistrationTests
                 "list-voice-policies",
                 "mock-write-user-policy",
                 "move-number-between-users",
-                "ping"
+                "offboard-voice-user",
+                "onboard-voice-user",
+                "ping",
+                "remove-phone-number",
+                "set-caller-id-assignment",
+                "update-callqueue-members",
+                "update-user-calling-policies",
+                "update-user-emergency-location",
+                "update-user-voicemail-settings"
             ],
             names);
 
@@ -47,6 +56,7 @@ public class ToolRegistrationTests
         Assert.IsType<ManifestValidatingMcpServerTool>(tools.Single(t => t.ProtocolTool.Name == "ping"));
         Assert.IsType<ManifestValidatingMcpServerTool>(tools.Single(t => t.ProtocolTool.Name == "mock-write-user-policy"));
         Assert.IsType<ManifestPipelineTool>(tools.Single(t => t.ProtocolTool.Name == "get-user-voice-config"));
+        Assert.IsType<ManifestPipelineTool>(tools.Single(t => t.ProtocolTool.Name == "assign-phone-number"));
     }
 
     [Fact]
@@ -87,6 +97,14 @@ public class ToolRegistrationTests
                     Required = false,
                     Minimum = 1,
                     Maximum = 200
+                },
+                ["agentUserUpns"] = new()
+                {
+                    Type = "array",
+                    Required = false,
+                    Items = new ToolManifestArrayItems { Type = "string", Format = "upn" },
+                    MinItems = 1,
+                    MaxItems = 50
                 }
             },
             MaxBlastRadius = 0,
@@ -97,12 +115,18 @@ public class ToolRegistrationTests
         var properties = tool.ProtocolTool.InputSchema.GetProperty("properties");
         var assignmentStatus = properties.GetProperty("assignmentStatus");
         var pageSize = properties.GetProperty("pageSize");
+        var agentUserUpns = properties.GetProperty("agentUserUpns");
 
         Assert.Equal(
             ["assigned", "unassigned", "all"],
             assignmentStatus.GetProperty("enum").EnumerateArray().Select(value => value.GetString()));
         Assert.Equal(1, pageSize.GetProperty("minimum").GetDecimal());
         Assert.Equal(200, pageSize.GetProperty("maximum").GetDecimal());
+        Assert.Equal("array", agentUserUpns.GetProperty("type").GetString());
+        Assert.Equal("string", agentUserUpns.GetProperty("items").GetProperty("type").GetString());
+        Assert.Equal("upn", agentUserUpns.GetProperty("items").GetProperty("format").GetString());
+        Assert.Equal(1, agentUserUpns.GetProperty("minItems").GetInt32());
+        Assert.Equal(50, agentUserUpns.GetProperty("maxItems").GetInt32());
     }
 
     [Fact]

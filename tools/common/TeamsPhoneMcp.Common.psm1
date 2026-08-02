@@ -197,6 +197,24 @@ function Get-PropertyValue {
     return $property.Value
 }
 
+function Test-TeamsEmergencyLocationValidated {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowNull()]
+        [object]$Location
+    )
+
+    if ($null -eq $Location) { return $false }
+
+    $validationStatus = [string](Get-PropertyValue -InputObject $Location -Name 'ValidationStatus')
+    if (-not [string]::IsNullOrWhiteSpace($validationStatus)) {
+        return [string]::Equals($validationStatus, 'Validated', [System.StringComparison]::OrdinalIgnoreCase)
+    }
+
+    return [bool](Get-PropertyValue -InputObject $Location -Name 'IsValidated' -Default $false)
+}
+
 <#
 .SYNOPSIS
     Returns $true when the supplied value is a GUID.
@@ -330,4 +348,4 @@ function Select-StagePage {
     }
 }
 
-Export-ModuleMember -Function Get-StageInput, Write-StageResult, Write-StageSnapshot, Test-IsThrottlingError, Invoke-WithRetry, Wait-ForCondition, Get-PropertyValue, Test-IsGuid, Get-AssignedPolicyName, ConvertTo-E164Number, Select-StagePage
+Export-ModuleMember -Function Get-StageInput, Write-StageResult, Write-StageSnapshot, Test-IsThrottlingError, Invoke-WithRetry, Wait-ForCondition, Get-PropertyValue, Test-TeamsEmergencyLocationValidated, Test-IsGuid, Get-AssignedPolicyName, ConvertTo-E164Number, Select-StagePage

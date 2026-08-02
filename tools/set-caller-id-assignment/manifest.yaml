@@ -1,0 +1,27 @@
+id: set-caller-id-assignment
+version: 1.0.0
+summary: Assign an existing caller ID policy to a user.
+category: change
+riskTier: 1
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: false
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  userUpn: { type: string, format: upn, required: true }
+  policyName: { type: string, required: true }
+  dryRun: { type: boolean, required: false }
+  whatIf: { type: boolean, required: false }
+  confirmationToken: { type: string, required: false }
+  blastRadius: { type: integer, required: false }
+preflight:
+  - target is a user account
+  - requested caller ID policy exists
+verification:
+  - requested caller ID policy assigned
+rollback: restore the original caller ID policy assignment or tenant default
+maxBlastRadius: 1
+timeoutSeconds: 180

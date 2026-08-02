@@ -17,7 +17,7 @@ execution.
 The repository is tenant-agnostic and contains no customer data or baked-in
 credentials. Tenant credentials are supplied entirely through local configuration.
 
-> **Project status:** Milestones M1–M4 are complete. Interfaces, manifests, and
+> **Project status:** Milestones M1–M5 are complete. Interfaces, manifests, and
 > configuration may change without backward compatibility before the first release.
 
 ## What works today
@@ -27,12 +27,15 @@ credentials. Tenant credentials are supplied entirely through local configuratio
 - Strict YAML manifests with startup schema and annotation parity checks.
 - Raw tool-argument validation before C# binding.
 - Risk tiers, blast-radius checks, dry-run defaults, and HMAC confirmation tokens.
+- Server and per-session what-if ceilings that force simulation, mark results with
+  `simulated: true`, and never issue an execution token.
 - An offline-tested tenant session manager with immutable tenant/credential context,
   read/write coordination, idle expiry, LRU eviction, and fatal-session replacement.
 - A read-only `ping` tool and `mock-write-user-policy` safety-flow demonstration.
 - Ten Phase A read-only Teams Phone tools, each with its own Pester suite.
-- One full-depth write tool, `move-number-between-users`, exercising every stage
-  (snapshot → preflight → dry-run → execute → verify → rollback) — see
+- All ten Phase D write tools: eight atomic user-level operations and the
+  `onboard-voice-user` / `offboard-voice-user` composites, each exercising the safe
+  stage pipeline (snapshot → preflight → dry-run → execute → verify → rollback) — see
   [`docs/write-tools.md`](./docs/write-tools.md).
 - A local JSONL audit trail with parameter redaction, correlation ids, snapshot
   storage, and a retention sweeper — see [`docs/audit.md`](./docs/audit.md).
@@ -40,7 +43,8 @@ credentials. Tenant credentials are supplied entirely through local configuratio
 
 ## Not implemented yet
 
-- The remaining Phase D–F write and audit-query tools.
+- Phase B–C diagnostics and reports, Phase E shared-object writes, and Phase F
+  audit-query tools.
 - Container packaging or a supported release artifact.
 - Hash-chained audit records and OpenTelemetry export (planned post-v1).
 
@@ -70,7 +74,16 @@ Pester suite; adding a tool never requires editing the host engine.
 
 | Tool | Tier | What it does |
 | ---- | ---- | ------------ |
+| `assign-phone-number` | 1 | Enables enterprise voice, assigns an available number, and optionally applies existing policies and a validated emergency location |
+| `remove-phone-number` | 2 | Releases a user's number to tenant inventory while preserving restorable metadata |
 | `move-number-between-users` | 2 | Releases an assigned phone number from one user and assigns it to another, with preflight gating, verification, and automatic rollback |
+| `onboard-voice-user` | 2 | Composes number, policy, caller ID, voicemail, and emergency-location setup with reverse compensation |
+| `offboard-voice-user` | 2 | Removes queue memberships, releases the number, clears policies, disables enterprise voice, and reports disposition |
+| `update-callqueue-members` | 1 | Replaces one queue's direct user membership |
+| `update-user-calling-policies` | 1 | Assigns existing voice routing, dial plan, and Teams calling policies |
+| `update-user-voicemail-settings` | 1 | Updates per-user voicemail and out-of-office greeting behavior |
+| `set-caller-id-assignment` | 1 | Assigns an existing caller ID policy |
+| `update-user-emergency-location` | 2 | Assigns an existing validated, rollback-safe emergency location |
 
 Write tools are dry-run by default and require an HMAC confirmation token issued by a
 prior dry-run before anything is changed. See
@@ -98,12 +111,14 @@ tests/unit/               xUnit unit and host-level MCP acceptance tests
 ```bash
 dotnet build TeamsPhoneMcp.sln
 dotnet test  TeamsPhoneMcp.sln
+pwsh -NoProfile -c "Invoke-Pester -Path tools"
 ```
 
 ## Development quickstart
 
-These commands run the M1 development harness. They do not connect to Microsoft 365
-or perform real Teams Phone administration.
+These commands run the local development host. Listing tools does not connect to
+Microsoft 365; calling a tenant tool requires a configured credential, and confirmed
+write calls can change Teams Phone state.
 
 The host selects its transport from the command line / environment:
 
@@ -118,6 +133,7 @@ The host selects its transport from the command line / environment:
 | ------------------------------ | --------------------------------------------- | ----------------------------------------- |
 | Client auth token (HTTP)       | `TEAMSPHONE_MCP_BEARER_TOKEN` (or `Auth:BearerToken`) | Static token clients must present    |
 | Confirmation token signing key | `TEAMSPHONE_MCP_CONFIRMATION_TOKEN_KEY` (or `Policy:ConfirmationTokenKey`) | Base64 key to keep dry-run confirmation tokens valid across restarts |
+| Server mode ceiling             | `TEAMSPHONE_MCP_MODE` (or `ServerMode`) | `full` (default), `whatif`, or `readonly` |
 | Tool manifest root             | `ToolManifests__ToolsRootPath` (or `ToolManifests:ToolsRootPath`) | Optional manifest directory override |
 | Session idle timeout           | `TenantSessions__IdleTimeout` (or `TenantSessions:IdleTimeout`) | Inactive session lifetime; default `00:10:00` |
 | Maximum tenant sessions        | `TenantSessions__MaxSessions` (or `TenantSessions:MaxSessions`) | Live session cap; default `10` |
@@ -162,8 +178,8 @@ dotnet run --project src/TeamsPhoneMcp.Host -- --stdio
 3. Choose transport **Streamable HTTP**, URL `http://127.0.0.1:5199/mcp`.
 4. Under **Authentication**, add an `Authorization` header using the `Bearer`
    scheme followed by your configured token.
-5. Connect, then **List Tools** → you should see `ping` and
-   `mock-write-user-policy`.
+5. Connect, then **List Tools** → you should see the 22 registered tools, including
+  `ping`, the Phase A reads, and the Phase D writes.
 6. Call `mock-write-user-policy` once without `dryRun:false` to get a
    `confirmationToken`, then call again with `dryRun:false` and that token to
    execute the mocked write. Changing `targetUserUpn`, `policyName`, or
@@ -192,10 +208,8 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:5199/mcp \
 
 ## Next milestone
 
-M4 delivers the write pipeline proof: `move-number-between-users` at full depth, which
-sets the quality bar for every later MACD tool. The remaining Phase D–F tools, server
-mode ceilings in deployment guidance, Docker packaging, and a supported release
-artifact remain M5 or later work.
+M5.5 adds the Phase B–C diagnostics and reports plus local Phase F audit-query tools.
+M6 then hardens packaging, documentation, CI, and the first supported container release.
 
 ## License
 

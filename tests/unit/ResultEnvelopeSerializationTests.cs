@@ -39,6 +39,7 @@ public class ResultEnvelopeSerializationTests
             TenantId = TenantId,
             CorrelationId = "corr-42",
             DryRun = false,
+            Simulated = true,
             ConfirmationToken = null,
             Summary = "Moved caller ID.",
             Diff = new ToolDiff(before, after),
@@ -56,6 +57,7 @@ public class ResultEnvelopeSerializationTests
         Assert.Equal(ToolExecutionStatus.Succeeded, roundTripped!.Status);
         Assert.Equal("move-number", roundTripped.ToolId);
         Assert.Equal(TenantId, roundTripped.TenantId);
+        Assert.True(roundTripped.Simulated);
         Assert.Equal("A", roundTripped.Diff!.Before!.Value.GetProperty("callerId").GetString());
         Assert.Equal("B", roundTripped.Diff!.After!.Value.GetProperty("callerId").GetString());
         Assert.Single(roundTripped.Preflight!);

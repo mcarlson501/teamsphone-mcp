@@ -1,0 +1,30 @@
+id: update-user-calling-policies
+version: 1.0.0
+summary: Assign existing online voice routing, tenant dial plan, and Teams calling policies to a user.
+category: change
+riskTier: 1
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: false
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  userUpn: { type: string, format: upn, required: true }
+  onlineVoiceRoutingPolicy: { type: string, required: false }
+  tenantDialPlan: { type: string, required: false }
+  teamsCallingPolicy: { type: string, required: false }
+  dryRun: { type: boolean, required: false }
+  whatIf: { type: boolean, required: false }
+  confirmationToken: { type: string, required: false }
+  blastRadius: { type: integer, required: false }
+preflight:
+  - target is a user account
+  - at least one policy assignment is requested
+  - requested policies exist
+verification:
+  - requested policies assigned
+rollback: restore the original policy assignments, including tenant defaults
+maxBlastRadius: 1
+timeoutSeconds: 240

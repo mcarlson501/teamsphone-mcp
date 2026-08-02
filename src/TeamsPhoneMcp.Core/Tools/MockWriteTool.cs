@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 using ModelContextProtocol.Server;
 using TeamsPhoneMcp.Core.Manifests;
 using TeamsPhoneMcp.Core.Policy;
@@ -7,7 +8,12 @@ using TeamsPhoneMcp.Core.Policy;
 namespace TeamsPhoneMcp.Core.Tools;
 
 [McpServerToolType]
-public sealed class MockWriteTool(IToolManifestCatalog manifestCatalog, WritePolicyEngine policyEngine)
+public sealed class MockWriteTool(
+    IToolManifestCatalog manifestCatalog,
+    WritePolicyEngine policyEngine,
+    IMcpRequestSessionAccessor? requestSessionAccessor = null,
+    IMcpSessionPolicyStore? sessionPolicyStore = null,
+    IConfiguration? configuration = null)
 {
     private const string ToolId = "mock-write-user-policy";
 
@@ -25,6 +31,26 @@ public sealed class MockWriteTool(IToolManifestCatalog manifestCatalog, WritePol
     {
         var manifest = manifestCatalog.GetRequired(ToolId);
         var correlationId = Guid.NewGuid().ToString();
+        var serverMode = ServerModeCeiling.Resolve(configuration);
+        var sessionWhatIfMode = sessionPolicyStore?.IsWhatIfMode(requestSessionAccessor?.SessionId) ?? false;
+        var effectiveWhatIfMode =
+            serverMode == ServerModeCeiling.Mode.WhatIf || sessionWhatIfMode;
+
+        if (serverMode == ServerModeCeiling.Mode.ReadOnly)
+        {
+            return new MockWriteResult(
+                Status: "policyRejected",
+                ToolId: manifest.Id,
+                ToolVersion: manifest.Version,
+                TenantId: tenantId,
+                CorrelationId: correlationId,
+                DryRun: false,
+                Simulated: false,
+                ConfirmationToken: null,
+                Summary: $"Blocked by policy for {targetUserUpn}.",
+                ErrorCode: "readOnlyMode",
+                ErrorMessage: "The server is running in read-only mode; this tool is not available.");
+        }
 
         var toolParams = JsonSerializer.SerializeToElement(new
         {
@@ -44,7 +70,7 @@ public sealed class MockWriteTool(IToolManifestCatalog manifestCatalog, WritePol
                 blastRadius,
                 AllowTier3: false,
                 MaxRiskTier: 3,
-                SessionWhatIfMode: false),
+                SessionWhatIfMode: effectiveWhatIfMode),
             DateTimeOffset.UtcNow);
 
         if (!decision.Approved)

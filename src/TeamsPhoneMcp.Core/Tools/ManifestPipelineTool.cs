@@ -68,6 +68,11 @@ public sealed class ManifestPipelineTool : McpServerTool
 
         var correlationId = Guid.NewGuid().ToString();
         var serverMode = ServerModeCeiling.Resolve(services);
+        var sessionWhatIfMode = services
+            .GetRequiredService<IMcpSessionPolicyStore>()
+            .IsWhatIfMode(request.Server?.SessionId);
+        var effectiveWhatIfMode =
+            serverMode == ServerModeCeiling.Mode.WhatIf || sessionWhatIfMode;
         var timeProvider = services.GetService<TimeProvider>() ?? TimeProvider.System;
 
         // Every exit path below writes exactly one audit record (build spec §9.1).
@@ -77,7 +82,7 @@ public sealed class ManifestPipelineTool : McpServerTool
             correlationId,
             tenantId.ToString(),
             businessParameters,
-            Simulated: serverMode == ServerModeCeiling.Mode.WhatIf)
+            Simulated: effectiveWhatIfMode)
         {
             SessionId = request.Server?.SessionId,
             ClientId = DescribeClient(request),
@@ -129,7 +134,7 @@ public sealed class ManifestPipelineTool : McpServerTool
                 reader.OptionalInt("blastRadius", defaultValue: 1),
                 reader.OptionalBool("allowTier3") ?? false,
                 reader.OptionalInt("maxRiskTier", defaultValue: 3),
-                SessionWhatIfMode: serverMode == ServerModeCeiling.Mode.WhatIf),
+                SessionWhatIfMode: effectiveWhatIfMode),
             timeProvider.GetUtcNow());
 
         var runner = services.GetRequiredService<IToolPipelineRunner>();
@@ -216,6 +221,27 @@ public sealed class ManifestPipelineTool : McpServerTool
                 schema["maximum"] = input.Maximum.Value;
             }
 
+            if (input.Items is not null)
+            {
+                var itemSchema = new JsonObject { ["type"] = MapSchemaType(input.Items.Type) };
+                if (!string.IsNullOrWhiteSpace(input.Items.Format))
+                {
+                    itemSchema["format"] = input.Items.Format;
+                }
+
+                schema["items"] = itemSchema;
+            }
+
+            if (input.MinItems.HasValue)
+            {
+                schema["minItems"] = input.MinItems.Value;
+            }
+
+            if (input.MaxItems.HasValue)
+            {
+                schema["maxItems"] = input.MaxItems.Value;
+            }
+
             properties[name] = schema;
             if (input.Required)
             {
@@ -254,6 +280,7 @@ public sealed class ManifestPipelineTool : McpServerTool
         "integer" => "integer",
         "number" => "number",
         "boolean" => "boolean",
+        "array" => "array",
         _ => "string",
     };
 

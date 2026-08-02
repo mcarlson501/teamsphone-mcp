@@ -1,0 +1,29 @@
+id: update-user-voicemail-settings
+version: 1.0.0
+summary: Update a user's voicemail enabled state and automatic out-of-office greeting behavior.
+category: change
+riskTier: 1
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: false
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  userUpn: { type: string, format: upn, required: true }
+  voicemailEnabled: { type: boolean, required: false }
+  followAutomaticReplies: { type: boolean, required: false }
+  followCalendarEvents: { type: boolean, required: false }
+  dryRun: { type: boolean, required: false }
+  whatIf: { type: boolean, required: false }
+  confirmationToken: { type: string, required: false }
+  blastRadius: { type: integer, required: false }
+preflight:
+  - target is a user account
+  - at least one voicemail setting is requested
+verification:
+  - requested voicemail settings applied
+rollback: restore the original values for each requested voicemail setting
+maxBlastRadius: 1
+timeoutSeconds: 180

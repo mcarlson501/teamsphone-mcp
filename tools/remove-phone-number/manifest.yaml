@@ -1,0 +1,30 @@
+id: remove-phone-number
+version: 1.0.0
+summary: Remove a phone number from a user and release it to the tenant inventory or carrier pool.
+category: delete
+riskTier: 2
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: false
+  destructiveHint: true
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  userUpn: { type: string, format: upn, required: true }
+  phoneNumber: { type: string, required: false }
+  dryRun: { type: boolean, required: false }
+  whatIf: { type: boolean, required: false }
+  confirmationToken: { type: string, required: false }
+  blastRadius: { type: integer, required: false }
+preflight:
+  - target is a user account
+  - target user has the phone number assigned
+  - the number has a known tenant number type
+  - tenant inventory assigns the number to the target user
+verification:
+  - number released from target user
+  - number released to tenant inventory
+rollback: reassign the original number and number type to the target user
+maxBlastRadius: 1
+timeoutSeconds: 300

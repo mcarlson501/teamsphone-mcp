@@ -56,6 +56,24 @@ public sealed record ToolManifestInput
 
     [JsonPropertyName("maximum")]
     public decimal? Maximum { get; init; }
+
+    [JsonPropertyName("items")]
+    public ToolManifestArrayItems? Items { get; init; }
+
+    [JsonPropertyName("minItems")]
+    public int? MinItems { get; init; }
+
+    [JsonPropertyName("maxItems")]
+    public int? MaxItems { get; init; }
+}
+
+public sealed record ToolManifestArrayItems
+{
+    [JsonPropertyName("type")]
+    public required string Type { get; init; }
+
+    [JsonPropertyName("format")]
+    public string? Format { get; init; }
 }
 
 public sealed record ToolManifestAnnotations

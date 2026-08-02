@@ -90,7 +90,56 @@ public sealed class ManifestCatalogStartupValidator(
         ToolManifestInput input) =>
         SchemaContainsAllowedValues(schema, input.AllowedValues) &&
         SchemaContainsDecimal(schema, "minimum", input.Minimum) &&
-        SchemaContainsDecimal(schema, "maximum", input.Maximum);
+        SchemaContainsDecimal(schema, "maximum", input.Maximum) &&
+        SchemaContainsArrayConstraints(schema, input);
+
+    private static bool SchemaContainsArrayConstraints(
+        System.Text.Json.JsonElement schema,
+        ToolManifestInput input)
+    {
+        if (input.Items is null)
+        {
+            return !schema.TryGetProperty("items", out _) &&
+                   !schema.TryGetProperty("minItems", out _) &&
+                   !schema.TryGetProperty("maxItems", out _);
+        }
+
+        if (!schema.TryGetProperty("items", out var items) ||
+            !SchemaContainsType(items, input.Items.Type) ||
+            !SchemaContainsString(items, "format", input.Items.Format))
+        {
+            return false;
+        }
+
+        return SchemaContainsInt(schema, "minItems", input.MinItems) &&
+               SchemaContainsInt(schema, "maxItems", input.MaxItems);
+    }
+
+    private static bool SchemaContainsString(
+        System.Text.Json.JsonElement schema,
+        string propertyName,
+        string? expected)
+    {
+        if (!schema.TryGetProperty(propertyName, out var value))
+        {
+            return expected is null;
+        }
+
+        return expected is not null && string.Equals(value.GetString(), expected, StringComparison.Ordinal);
+    }
+
+    private static bool SchemaContainsInt(
+        System.Text.Json.JsonElement schema,
+        string propertyName,
+        int? expected)
+    {
+        if (!schema.TryGetProperty(propertyName, out var value))
+        {
+            return expected is null;
+        }
+
+        return expected.HasValue && value.TryGetInt32(out var actual) && actual == expected.Value;
+    }
 
     private static bool SchemaContainsAllowedValues(
         System.Text.Json.JsonElement schema,

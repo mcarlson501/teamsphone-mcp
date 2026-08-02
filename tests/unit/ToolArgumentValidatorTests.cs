@@ -14,7 +14,8 @@ public class ToolArgumentValidatorTests
               "targetUserUpn": "user@example.com",
               "blastRadius": 1,
               "dryRun": true,
-              "score": 1.5
+              "score": 1.5,
+              "agentUserUpns": ["agent1@example.com", "agent2@example.com"]
             }
             """);
 
@@ -121,6 +122,39 @@ public class ToolArgumentValidatorTests
         Assert.DoesNotContain("unexpected", exception.Message);
     }
 
+    [Fact]
+    public void Validate_RejectsInvalidArrayItemWithoutEchoingItsValue()
+    {
+        var arguments = ParseArguments("""
+            {
+              "targetUserUpn": "user@example.com",
+              "agentUserUpns": ["agent@example.com", "not a upn"]
+            }
+            """);
+
+        var exception = Assert.Throws<McpException>(
+            () => ToolArgumentValidator.Validate(CreateManifest(), arguments));
+
+        Assert.Contains("argument 'agentUserUpns[1]' must be a valid UPN", exception.Message);
+        Assert.DoesNotContain("not a upn", exception.Message);
+    }
+
+    [Fact]
+    public void Validate_RejectsArrayOutsideItemBounds()
+    {
+        var arguments = ParseArguments("""
+            {
+              "targetUserUpn": "user@example.com",
+              "agentUserUpns": []
+            }
+            """);
+
+        var exception = Assert.Throws<McpException>(
+            () => ToolArgumentValidator.Validate(CreateManifest(), arguments));
+
+        Assert.Contains("argument 'agentUserUpns' must contain at least 1 items", exception.Message);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(201)]
@@ -173,6 +207,14 @@ public class ToolArgumentValidatorTests
                 Required = false,
                 Minimum = 1,
                 Maximum = 200
+            },
+            ["agentUserUpns"] = new()
+            {
+                Type = "array",
+                Required = false,
+                Items = new ToolManifestArrayItems { Type = "string", Format = "upn" },
+                MinItems = 1,
+                MaxItems = 50
             }
         },
         MaxBlastRadius = 1,
