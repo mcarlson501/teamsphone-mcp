@@ -78,6 +78,15 @@ function Test-AssignmentTargetsUser {
     )
 }
 
+function Test-OriginalLocationRestorable {
+    param([AllowNull()][object]$NumberState)
+    if ($null -eq $NumberState) { return $false }
+    $locationId = [string](Get-PropertyValue -InputObject $NumberState -Name 'locationId')
+    $numberType = [string](Get-PropertyValue -InputObject $NumberState -Name 'phoneNumberType')
+    return -not [string]::IsNullOrWhiteSpace($locationId) -or
+        [string]::Equals($numberType, 'DirectRouting', [System.StringComparison]::OrdinalIgnoreCase)
+}
+
 function New-Check {
     param([string]$Check, [bool]$Passed, [AllowNull()][string]$Detail)
     return [ordered]@{ check = $Check; passed = $Passed; detail = $Detail }
@@ -116,9 +125,8 @@ switch ($Stage) {
         $inventoryMatches = Test-AssignmentTargetsUser -NumberState $number -User $user
         $locationExists = [bool](Get-PropertyValue -InputObject $location -Name 'exists' -Default $false)
         $locationValidated = [bool](Get-PropertyValue -InputObject $location -Name 'validated' -Default $false)
-        $originalLocationId = [string](Get-PropertyValue -InputObject $number -Name 'locationId')
         $numberType = [string](Get-PropertyValue -InputObject $number -Name 'phoneNumberType')
-        $restorable = -not [string]::IsNullOrWhiteSpace($originalLocationId) -or [string]::Equals($numberType, 'DirectRouting', [System.StringComparison]::OrdinalIgnoreCase)
+        $restorable = Test-OriginalLocationRestorable -NumberState $number
 
         $checks = @(
             (New-Check -Check 'target is a user account with a phone number' -Passed $targetReady -Detail $(if ($targetReady) { "$userUpn is a user with phone number $($user.lineUri)." } else { "$userUpn is not an eligible numbered user." })),
@@ -149,6 +157,9 @@ switch ($Stage) {
         Assert-Snapshot -Snapshot $snapshot -StageName $Stage
         $originalUser = Get-PropertyValue -InputObject $snapshot -Name 'user'
         $originalNumber = Get-PropertyValue -InputObject $snapshot -Name 'number'
+        if (-not (Test-OriginalLocationRestorable -NumberState $originalNumber)) {
+            throw 'The original emergency location cannot be safely restored; nothing was changed.'
+        }
         $liveUser = Get-UserState -Upn $userUpn
         if (-not [string]::Equals([string]$liveUser.lineUri, [string]$originalUser.lineUri, [System.StringComparison]::OrdinalIgnoreCase)) {
             throw 'The user phone number changed since the snapshot; nothing was changed.'

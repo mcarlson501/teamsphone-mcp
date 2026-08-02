@@ -107,6 +107,14 @@ Describe 'update-user-emergency-location' {
         $parsed.after.number.locationId | Should -Be '22222222-2222-2222-2222-222222222222'
     }
 
+    It 'refuses a non-restorable Calling Plan location change during execute' {
+        $global:UelLocationId = $null
+        $snapshot = Invoke-Snapshot
+
+        { & $script:RunScript -Stage execute -InputJson (New-StageInput -ToolInput (Get-ToolInput) -Snapshot $snapshot) } | Should -Throw '*cannot be safely restored*'
+        Should -Invoke Set-CsPhoneNumberAssignment -Times 0 -Exactly
+    }
+
     It 'is idempotent when the requested location is assigned' {
         $global:UelLocationId = '22222222-2222-2222-2222-222222222222'
         $snapshot = Invoke-Snapshot

@@ -243,7 +243,7 @@ switch ($Stage) {
 
         $disposition = [ordered]@{
             userPrincipalName        = $userUpn
-            enterpriseVoiceDisabled = [bool]$original.enterpriseVoiceEnabled
+            enterpriseVoiceDisabled = $enterpriseVoiceDisabled
             phoneNumber              = $original.lineUri
             numberDisposition        = if ($null -eq $snapshot.numberSnapshot) { 'notAssigned' } else { 'releasedToTenantInventory' }
             removedQueueNames        = @($queues | ForEach-Object { [string]$_.name })

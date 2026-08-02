@@ -94,6 +94,7 @@ Describe 'offboard-voice-user' {
         $global:OffLineUri | Should -BeNullOrEmpty
         $global:OffEnterpriseVoice | Should -BeFalse
         $global:OffPolicies.Values | Should -Not -Contain 'US-Route'
+        $parsed.after.disposition.enterpriseVoiceDisabled | Should -BeTrue
         $parsed.after.disposition.numberDisposition | Should -Be 'releasedToTenantInventory'
         $parsed.after.disposition.removedQueueNames | Should -Contain 'Queue queue-1'
     }
@@ -111,6 +112,17 @@ Describe 'offboard-voice-user' {
 
         $parsed.after.disposition.numberDisposition | Should -Be 'notAssigned'
         $parsed.after.disposition.removedQueueNames | Should -HaveCount 0
+        $parsed.after.disposition.enterpriseVoiceDisabled | Should -BeFalse
+    }
+
+    It 'reports enterprise voice unchanged when it was disabled after the snapshot' {
+        $snapshot = Invoke-Snapshot
+        $global:OffEnterpriseVoice = $false
+
+        $parsed = & $script:RunScript -Stage execute -InputJson (New-StageInput -Snapshot $snapshot) | ConvertFrom-Json -Depth 40
+
+        $parsed.after.disposition.enterpriseVoiceDisabled | Should -BeFalse
+        Should -Invoke Set-CsPhoneNumberAssignment -Times 0 -Exactly -ParameterFilter { $EnterpriseVoiceEnabled -eq $false }
     }
 
     It 'compensates queue and number changes when policy cleanup fails' {
