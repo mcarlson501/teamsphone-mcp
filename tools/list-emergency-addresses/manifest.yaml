@@ -1,0 +1,19 @@
+id: list-emergency-addresses
+version: 1.0.0
+summary: List validated emergency locations (civic addresses and their places) in the tenant, optionally filtered by city, so dynamic emergency calling coverage can be reviewed.
+category: read
+riskTier: 0
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  cityFilter: { type: string, required: false }
+  pageSize: { type: integer, required: false, minimum: 1, maximum: 200 }
+  continuationToken: { type: string, required: false }
+redactParams: []
+maxBlastRadius: 0
+timeoutSeconds: 180

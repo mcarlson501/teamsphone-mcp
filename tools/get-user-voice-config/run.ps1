@@ -12,20 +12,6 @@ $ErrorActionPreference = 'Stop'
 
 Import-Module (Join-Path $PSScriptRoot '..' 'common' 'TeamsPhoneMcp.Common.psm1') -Force -DisableNameChecking
 
-function Get-AssignedPolicyName {
-    param($Value)
-
-    if ($null -eq $Value) { return $null }
-    if ($Value -is [string]) { return $Value }
-
-    $nameProperty = $Value.PSObject.Properties['Name']
-    if ($null -ne $nameProperty -and $null -ne $nameProperty.Value) {
-        return [string]$nameProperty.Value
-    }
-
-    return [string]$Value
-}
-
 $payload = Get-StageInput -InputJson $InputJson
 $userUpn = $payload.input.userUpn
 

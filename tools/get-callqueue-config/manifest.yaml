@@ -1,0 +1,17 @@
+id: get-callqueue-config
+version: 1.0.0
+summary: Read the full configuration of one call queue, including resolved agent identities, routing method, overflow and timeout handling, and attached resource accounts.
+category: read
+riskTier: 0
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  callQueueIdentity: { type: string, required: true }
+redactParams: []
+maxBlastRadius: 0
+timeoutSeconds: 120

@@ -1,0 +1,19 @@
+id: get-schedules
+version: 1.0.0
+summary: List the tenant's business-hours and holiday schedules with their time ranges, optionally restricted to schedules referenced by an auto attendant.
+category: read
+riskTier: 0
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  usedOnly: { type: boolean, required: false }
+  pageSize: { type: integer, required: false, minimum: 1, maximum: 200 }
+  continuationToken: { type: string, required: false }
+redactParams: []
+maxBlastRadius: 0
+timeoutSeconds: 180

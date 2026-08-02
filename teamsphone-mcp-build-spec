@@ -347,13 +347,13 @@ Scaffold solution, MCP C# SDK wired, stdio + Streamable HTTP, bearer auth middle
 **M1 — Tool registry + policy engine (no PowerShell yet; complete)**
 Manifest loader → JSON Schema → MCP tool registration with annotations; dry-run/confirmation-token flow; tier gating; blast-radius checks; `_template` folder. ✅ Unit tests green; a mock write tool demonstrates the full two-step token flow through Inspector.
 
-**M2 — PowerShell execution engine + tenant sessions (in progress)**
+**M2 — PowerShell execution engine + tenant sessions (complete)**
 Runspace hosting, TenantSessionManager with all §4.1 invariants, stage pipeline runner, `tools/common` module, local credential provider. The offline session foundation is implemented first and fails closed without a configured execution factory. ✅ Isolation test passes; `get-user-voice-config` runs end-to-end against the dev tenant.
 
-**M3 — Phase A reads + audit foundation**
+**M3 — Phase A reads + audit foundation (complete)**
 All 10 Phase A tools + Pester suites + the §9 audit pipeline (JSONL schema, redaction, correlationIds, retention sweeper). ✅ Snapshot of dev tenant completes; every call (incl. a forced failure) produces a valid audit record.
 
-**M4 — Write pipeline proof (one tool, full depth)**
+**M4 — Write pipeline proof (one tool, full depth) (complete)**
 `move-number-between-users` implementing every stage incl. rollback. This PR sets the quality bar. ✅ Dry-run→confirm→execute→verify demonstrated on dev tenant; forced verify-failure produces `verifyFailedRolledBack` with both snapshots in audit.
 
 **M5 — Remaining Phase D write tools** ✅ Pester green; integration happy-paths green; session/server what-if modes demonstrated blocking execution.

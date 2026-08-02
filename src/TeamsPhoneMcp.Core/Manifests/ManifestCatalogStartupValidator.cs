@@ -75,12 +75,56 @@ public sealed class ManifestCatalogStartupValidator(
         foreach (var (inputName, input) in manifest.Inputs)
         {
             var propertySchema = properties.GetProperty(inputName);
-            if (!SchemaContainsType(propertySchema, input.Type) || requiredInputs.Contains(inputName) != input.Required)
+            if (!SchemaContainsType(propertySchema, input.Type) ||
+                requiredInputs.Contains(inputName) != input.Required ||
+                !SchemaContainsConstraints(propertySchema, input))
             {
                 throw new InvalidOperationException(
                     $"Manifest '{manifest.Id}' input '{inputName}' does not match its registered MCP tool input schema.");
             }
         }
+    }
+
+    private static bool SchemaContainsConstraints(
+        System.Text.Json.JsonElement schema,
+        ToolManifestInput input) =>
+        SchemaContainsAllowedValues(schema, input.AllowedValues) &&
+        SchemaContainsDecimal(schema, "minimum", input.Minimum) &&
+        SchemaContainsDecimal(schema, "maximum", input.Maximum);
+
+    private static bool SchemaContainsAllowedValues(
+        System.Text.Json.JsonElement schema,
+        IReadOnlyCollection<string>? allowedValues)
+    {
+        if (!schema.TryGetProperty("enum", out var schemaValues))
+        {
+            return allowedValues is null;
+        }
+
+        if (allowedValues is null || schemaValues.ValueKind != System.Text.Json.JsonValueKind.Array)
+        {
+            return false;
+        }
+
+        var values = schemaValues.EnumerateArray()
+            .Where(value => value.ValueKind == System.Text.Json.JsonValueKind.String)
+            .Select(value => value.GetString()!)
+            .ToList();
+        return values.Count == allowedValues.Count &&
+               values.ToHashSet(StringComparer.Ordinal).SetEquals(allowedValues);
+    }
+
+    private static bool SchemaContainsDecimal(
+        System.Text.Json.JsonElement schema,
+        string propertyName,
+        decimal? expected)
+    {
+        if (!schema.TryGetProperty(propertyName, out var value))
+        {
+            return expected is null;
+        }
+
+        return expected.HasValue && value.TryGetDecimal(out var actual) && actual == expected.Value;
     }
 
     private static bool SchemaContainsType(System.Text.Json.JsonElement schema, string manifestType)

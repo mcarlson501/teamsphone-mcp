@@ -24,7 +24,23 @@ public class ToolRegistrationTests
         var tools = provider.GetServices<McpServerTool>().ToList();
 
         var names = tools.Select(t => t.ProtocolTool.Name).OrderBy(name => name, StringComparer.Ordinal).ToList();
-        Assert.Equal(["get-user-voice-config", "mock-write-user-policy", "ping"], names);
+        Assert.Equal(
+            [
+                "check-user-licensing",
+                "get-autoattendant-config",
+                "get-callqueue-config",
+                "get-schedules",
+                "get-tenant-voice-snapshot",
+                "get-user-voice-config",
+                "list-emergency-addresses",
+                "list-phone-numbers",
+                "list-resource-accounts",
+                "list-voice-policies",
+                "mock-write-user-policy",
+                "move-number-between-users",
+                "ping"
+            ],
+            names);
 
         // The hand-written tools stay manifest-validated; manifest-driven tools
         // (run.ps1 present) auto-register as pipeline tools.
@@ -44,6 +60,49 @@ public class ToolRegistrationTests
 
         Assert.NotNull(tool.ProtocolTool.Annotations);
         Assert.True(tool.ProtocolTool.Annotations!.ReadOnlyHint);
+    }
+
+    [Fact]
+    public void ManifestPipelineTool_EmitsManifestInputConstraints()
+    {
+        var manifest = new ToolManifest
+        {
+            Id = "constrained-tool",
+            Version = "1.0.0",
+            Summary = "Constrained read tool.",
+            Category = "read",
+            RiskTier = 0,
+            Annotations = new ToolManifestAnnotations { ReadOnlyHint = true, IdempotentHint = true },
+            Inputs = new Dictionary<string, ToolManifestInput>(StringComparer.Ordinal)
+            {
+                ["assignmentStatus"] = new()
+                {
+                    Type = "string",
+                    Required = false,
+                    AllowedValues = ["assigned", "unassigned", "all"]
+                },
+                ["pageSize"] = new()
+                {
+                    Type = "integer",
+                    Required = false,
+                    Minimum = 1,
+                    Maximum = 200
+                }
+            },
+            MaxBlastRadius = 0,
+            TimeoutSeconds = 30
+        };
+
+        var tool = new ManifestPipelineTool(manifest);
+        var properties = tool.ProtocolTool.InputSchema.GetProperty("properties");
+        var assignmentStatus = properties.GetProperty("assignmentStatus");
+        var pageSize = properties.GetProperty("pageSize");
+
+        Assert.Equal(
+            ["assigned", "unassigned", "all"],
+            assignmentStatus.GetProperty("enum").EnumerateArray().Select(value => value.GetString()));
+        Assert.Equal(1, pageSize.GetProperty("minimum").GetDecimal());
+        Assert.Equal(200, pageSize.GetProperty("maximum").GetDecimal());
     }
 
     [Fact]
@@ -197,6 +256,35 @@ public class ToolRegistrationTests
         }
     }
 
+    [Fact]
+    public async Task AddTeamsPhoneTools_FailsHostStartup_WhenManifestInputConstraintsDiffer()
+    {
+        var toolsRoot = CopyBuiltManifestCatalog();
+        try
+        {
+            var manifestPath = Path.Combine(toolsRoot, "get-user-voice-config", "manifest.yaml");
+            var manifestYaml = File.ReadAllText(manifestPath);
+            File.WriteAllText(
+                manifestPath,
+                manifestYaml.Replace(
+                    "userUpn: { type: string, format: upn, required: true }",
+                    "userUpn: { type: string, format: upn, required: true, allowedValues: [allowed@example.com] }",
+                    StringComparison.Ordinal));
+            var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
+            builder.Configuration["ToolManifests:ToolsRootPath"] = toolsRoot;
+            builder.Services.AddMcpServer().AddTeamsPhoneTools();
+
+            using var host = builder.Build();
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+
+            Assert.Contains("input 'userUpn' does not match", exception.Message);
+        }
+        finally
+        {
+            Directory.Delete(toolsRoot, recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData("not-valid-base64!!!")]
     [InlineData("dG9vc2hvcnQ=")]
@@ -220,6 +308,19 @@ public class ToolRegistrationTests
 
         Assert.Contains("TEAMSPHONE_MCP_CONFIRMATION_TOKEN_KEY", ex.Message);
         Assert.Contains("CreateRandomBase64Key", ex.Message);
+    }
+
+    [Fact]
+    public void AddTeamsPhoneTools_RegistersContinuationTokenService()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddMcpServer().AddTeamsPhoneTools();
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.IsType<ContinuationTokenService>(provider.GetRequiredService<IContinuationTokenService>());
+        Assert.NotNull(provider.GetRequiredService<ToolPaginationResolver>());
     }
 
     [Fact]

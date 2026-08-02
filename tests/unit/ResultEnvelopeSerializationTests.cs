@@ -45,6 +45,7 @@ public class ResultEnvelopeSerializationTests
             Preflight = [new ToolCheckResult("hasNumber", true, null)],
             Verification = [new ToolCheckResult("moved", true, "confirmed")],
             Timings = new ToolTimings(120, new Dictionary<string, long> { ["Execute"] = 100 }),
+            Pagination = new ToolPagination(100, 75, true, "continuation-token"),
             Error = null
         };
 
@@ -60,6 +61,10 @@ public class ResultEnvelopeSerializationTests
         Assert.Single(roundTripped.Preflight!);
         Assert.Equal(120, roundTripped.Timings!.TotalMs);
         Assert.Equal(100, roundTripped.Timings!.Stages["Execute"]);
+        Assert.Equal(100, roundTripped.Pagination!.PageSize);
+        Assert.Equal(75, roundTripped.Pagination.ReturnedCount);
+        Assert.True(roundTripped.Pagination.HasMore);
+        Assert.Equal("continuation-token", roundTripped.Pagination.ContinuationToken);
     }
 
     private static ToolResultEnvelope Minimal(ToolExecutionStatus status) => new()

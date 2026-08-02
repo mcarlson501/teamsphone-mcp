@@ -18,8 +18,9 @@ Set-StrictMode -Version Latest
 .SYNOPSIS
     Parses the pipeline runner's -InputJson envelope into an object.
 .OUTPUTS
-    An object with `.input` (the canonical tool parameters) and `.snapshot`
-    (the captured pre-execution state, or $null on the first stage).
+    An object with `.input` (the canonical tool parameters), `.snapshot`
+    (the captured pre-execution state, or $null on the first stage), and
+    `.pagination` (host-validated page size/offset, or $null for detail tools).
 #>
 function Get-StageInput {
     [CmdletBinding()]
@@ -44,15 +45,36 @@ function Write-StageResult {
     param(
         [string]$Summary,
         [object]$After,
-        [object[]]$Checks
+        [object[]]$Checks,
+        [object]$Page
     )
 
     $result = [ordered]@{}
     if ($PSBoundParameters.ContainsKey('Summary')) { $result['summary'] = $Summary }
     if ($PSBoundParameters.ContainsKey('After')) { $result['after'] = $After }
     if ($PSBoundParameters.ContainsKey('Checks')) { $result['checks'] = $Checks }
+    if ($PSBoundParameters.ContainsKey('Page')) { $result['page'] = $Page }
 
     return ($result | ConvertTo-Json -Depth 32 -Compress)
+}
+
+<#
+.SYNOPSIS
+    Emits the single JSON result string for the `snapshot` stage.
+.DESCRIPTION
+    Unlike every other stage, the snapshot stage's output *is* the captured
+    state: the host stores it verbatim as the envelope's `diff.before` and
+    threads it back to later stages as `.snapshot`. So it is emitted as a bare
+    object rather than wrapped in the summary/after/checks envelope.
+#>
+function Write-StageSnapshot {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$State
+    )
+
+    return ($State | ConvertTo-Json -Depth 32 -Compress)
 }
 
 <#
@@ -141,4 +163,171 @@ function Wait-ForCondition {
     return $false
 }
 
-Export-ModuleMember -Function Get-StageInput, Write-StageResult, Test-IsThrottlingError, Invoke-WithRetry, Wait-ForCondition
+<#
+.SYNOPSIS
+    Reads a property from an object without tripping Set-StrictMode when the
+    property is absent.
+.DESCRIPTION
+    Teams cmdlet output shape varies by module version and telephony model, so
+    tools must treat every non-guaranteed property as optional.
+#>
+function Get-PropertyValue {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowNull()]
+        [object]$InputObject,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [object]$Default = $null
+    )
+
+    if ($null -eq $InputObject) { return $Default }
+
+    if ($InputObject -is [System.Collections.IDictionary]) {
+        if ($InputObject.Contains($Name)) { return $InputObject[$Name] }
+        return $Default
+    }
+
+    $property = $InputObject.PSObject.Properties[$Name]
+    if ($null -eq $property -or $null -eq $property.Value) { return $Default }
+
+    return $property.Value
+}
+
+<#
+.SYNOPSIS
+    Returns $true when the supplied value is a GUID.
+.DESCRIPTION
+    Used by tools that accept either a friendly name or an object identity so
+    they can pick the right lookup cmdlet parameter.
+#>
+function Test-IsGuid {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]
+        [string]$Value
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) { return $false }
+
+    $parsed = [Guid]::Empty
+    return [Guid]::TryParse($Value, [ref]$parsed)
+}
+
+<#
+.SYNOPSIS
+    Extracts the policy name from an assigned-policy value.
+.DESCRIPTION
+    Get-CsOnlineUser returns policy assignments either as a plain string or as an
+    object carrying a Name property; $null means the tenant default applies.
+#>
+function Get-AssignedPolicyName {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]
+        [object]$Value
+    )
+
+    if ($null -eq $Value) { return $null }
+    if ($Value -is [string]) { return $Value }
+
+    $name = Get-PropertyValue -InputObject $Value -Name 'Name'
+    if ($null -ne $name) { return [string]$name }
+
+    return [string]$Value
+}
+
+<#
+.SYNOPSIS
+    Normalizes a telephone number or tel: URI to bare E.164 form.
+.OUTPUTS
+    "+15551234567", or $null when the value is empty or not E.164-shaped. Any
+    extension suffix (";ext=123") is dropped.
+#>
+function ConvertTo-E164Number {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]
+        [string]$Value
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) { return $null }
+
+    $candidate = $Value.Trim()
+    if ($candidate -match '^(?i)tel:') { $candidate = $candidate.Substring(4) }
+
+    $extensionIndex = $candidate.IndexOf(';')
+    if ($extensionIndex -ge 0) { $candidate = $candidate.Substring(0, $extensionIndex) }
+
+    $candidate = ($candidate -replace '[\s\-\(\)\.]', '')
+    if ($candidate -notmatch '^\+[1-9]\d{6,14}$') { return $null }
+
+    return $candidate
+}
+
+<#
+.SYNOPSIS
+    Applies the host-issued page window to a fully materialized, stably ordered
+    collection and produces the `page` metadata the pipeline requires.
+.DESCRIPTION
+    The host owns paging state: it validates pageSize, decodes the continuation
+    token into an offset, and re-issues the next token from `nextOffset`. Tools
+    therefore only slice. Callers must sort deterministically before slicing so a
+    continuation token keeps pointing at the same window.
+.OUTPUTS
+    An object with `.Items` (the page), `.Page` (returnedCount/hasMore/nextOffset)
+    and `.TotalCount` (the pre-paging match count).
+#>
+function Select-StagePage {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowNull()]
+        [AllowEmptyCollection()]
+        [object[]]$Items,
+
+        [AllowNull()]
+        [object]$Pagination
+    )
+
+    $all = @($Items | Where-Object { $null -ne $_ })
+    $total = $all.Count
+
+    $offset = 0
+    $pageSize = $total
+    if ($null -ne $Pagination) {
+        $requestedSize = Get-PropertyValue -InputObject $Pagination -Name 'pageSize'
+        $requestedOffset = Get-PropertyValue -InputObject $Pagination -Name 'offset'
+        if ($null -ne $requestedSize) { $pageSize = [int]$requestedSize }
+        if ($null -ne $requestedOffset) { $offset = [int]$requestedOffset }
+    }
+
+    if ($offset -lt 0) { $offset = 0 }
+    if ($pageSize -lt 0) { $pageSize = 0 }
+
+    $slice = @()
+    if ($offset -lt $total -and $pageSize -gt 0) {
+        $lastIndex = [Math]::Min($total, $offset + $pageSize) - 1
+        $slice = @($all[$offset..$lastIndex])
+    }
+
+    $consumed = $offset + $slice.Count
+    $hasMore = $consumed -lt $total
+
+    $page = [ordered]@{
+        returnedCount = $slice.Count
+        hasMore       = $hasMore
+    }
+    if ($hasMore) { $page['nextOffset'] = $consumed }
+
+    return [pscustomobject]@{
+        Items      = $slice
+        Page       = $page
+        TotalCount = $total
+    }
+}
+
+Export-ModuleMember -Function Get-StageInput, Write-StageResult, Write-StageSnapshot, Test-IsThrottlingError, Invoke-WithRetry, Wait-ForCondition, Get-PropertyValue, Test-IsGuid, Get-AssignedPolicyName, ConvertTo-E164Number, Select-StagePage

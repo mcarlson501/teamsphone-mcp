@@ -1,0 +1,17 @@
+id: get-autoattendant-config
+version: 1.0.0
+summary: Read the full configuration of one auto attendant, including greetings, menu options and their call targets, operator, business-hours and holiday call flows, and attached resource accounts.
+category: read
+riskTier: 0
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  autoAttendantIdentity: { type: string, required: true }
+redactParams: []
+maxBlastRadius: 0
+timeoutSeconds: 120

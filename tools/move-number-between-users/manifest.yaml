@@ -1,0 +1,35 @@
+id: move-number-between-users
+version: 1.0.0
+summary: Move an assigned phone number from one user to another, releasing it from the source and assigning it to the target with rollback on failure.
+category: move
+riskTier: 2
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: false
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  sourceUserUpn: { type: string, format: upn, required: true }
+  targetUserUpn: { type: string, format: upn, required: true }
+  phoneNumber: { type: string, required: false }
+  dryRun: { type: boolean, required: false }
+  whatIf: { type: boolean, required: false }
+  confirmationToken: { type: string, required: false }
+  blastRadius: { type: integer, required: false }
+preflight:
+  - source and target are different users
+  - source user has the phone number assigned
+  - the number has a known tenant number type
+  - target is a user account
+  - target user is enterprise-voice capable
+  - target user is licensed for the number type
+  - target user has no phone number assigned
+verification:
+  - number assigned to target
+  - number released from source
+  - target user is enterprise voice enabled
+rollback: reassign the original number to the source user and restore its enterprise voice state
+maxBlastRadius: 1
+timeoutSeconds: 300

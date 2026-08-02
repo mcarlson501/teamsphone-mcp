@@ -27,7 +27,21 @@ public class McpHostAcceptanceTests : IClassFixture<WebApplicationFactory<Progra
         var tools = await client.ListToolsAsync();
 
         Assert.Equal(
-            ["get-user-voice-config", "mock-write-user-policy", "ping"],
+            [
+                "check-user-licensing",
+                "get-autoattendant-config",
+                "get-callqueue-config",
+                "get-schedules",
+                "get-tenant-voice-snapshot",
+                "get-user-voice-config",
+                "list-emergency-addresses",
+                "list-phone-numbers",
+                "list-resource-accounts",
+                "list-voice-policies",
+                "mock-write-user-policy",
+                "move-number-between-users",
+                "ping"
+            ],
             tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal));
 
         var ping = tools.Single(tool => tool.Name == "ping").ProtocolTool;
@@ -52,6 +66,15 @@ public class McpHostAcceptanceTests : IClassFixture<WebApplicationFactory<Progra
         Assert.True(voiceProperties.TryGetProperty("tenantId", out _));
         Assert.True(voiceProperties.TryGetProperty("credentialRef", out _));
         Assert.True(voiceProperties.TryGetProperty("userUpn", out _));
+
+        var moveNumber = tools.Single(tool => tool.Name == "move-number-between-users").ProtocolTool;
+        Assert.False(moveNumber.Annotations?.ReadOnlyHint);
+        Assert.False(moveNumber.Annotations?.DestructiveHint);
+        Assert.True(moveNumber.Annotations?.IdempotentHint);
+        var moveProperties = moveNumber.InputSchema.GetProperty("properties");
+        Assert.True(moveProperties.TryGetProperty("sourceUserUpn", out _));
+        Assert.True(moveProperties.TryGetProperty("targetUserUpn", out _));
+        Assert.True(moveProperties.TryGetProperty("confirmationToken", out _));
     }
 
     [Fact]

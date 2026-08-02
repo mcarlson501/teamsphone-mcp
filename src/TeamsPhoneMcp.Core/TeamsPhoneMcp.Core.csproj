@@ -9,6 +9,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\TeamsPhoneMcp.Audit\TeamsPhoneMcp.Audit.csproj" />
     <ProjectReference Include="..\TeamsPhoneMcp.Credentials\TeamsPhoneMcp.Credentials.csproj" />
   </ItemGroup>
 
