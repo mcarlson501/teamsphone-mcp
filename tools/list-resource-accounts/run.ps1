@@ -40,7 +40,8 @@ function Get-Association {
         }
     }
     catch {
-        return $null
+        if ($_.Exception.Message -match '(?i)(\bnot associated\b|\bassociation\b.*\bwas not found\b)') { return $null }
+        throw
     }
 
     if ($null -eq $association) { return $null }

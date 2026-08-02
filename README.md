@@ -17,9 +17,8 @@ execution.
 The repository is tenant-agnostic and contains no customer data or baked-in
 credentials. Tenant credentials are supplied entirely through local configuration.
 
-> **Project status:** Milestones M1–M3 are complete and M4 (the first full-depth write
-> tool) is in progress. Interfaces, manifests, and configuration may change without
-> backward compatibility before the first release.
+> **Project status:** Milestones M1–M4 are complete. Interfaces, manifests, and
+> configuration may change without backward compatibility before the first release.
 
 ## What works today
 

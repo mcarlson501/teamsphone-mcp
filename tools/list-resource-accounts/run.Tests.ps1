@@ -95,6 +95,16 @@ Describe 'list-resource-accounts' {
             Should -Invoke Get-CsOnlineApplicationInstanceAssociation -Times 1 -Exactly
         }
 
+        It 'treats a missing association as unattached' {
+            Mock Get-CsOnlineApplicationInstance { @(New-SampleInstances)[0] }
+            Mock Get-CsOnlineApplicationInstanceAssociation { throw "Association for $Identity was not found." }
+
+            $parsed = & $script:RunScript -Stage execute -InputJson (New-StageInput) | ConvertFrom-Json
+
+            $parsed.after.resourceAccounts[0].attached | Should -BeFalse
+            $parsed.after.resourceAccounts[0].association | Should -BeNullOrEmpty
+        }
+
         It 'returns an empty page when the tenant has no resource accounts' {
             Mock Get-CsOnlineApplicationInstance { @() }
             Mock Get-CsOnlineApplicationInstanceAssociation { throw 'should not be called' }
@@ -125,6 +135,13 @@ Describe 'list-resource-accounts' {
             Mock Get-CsOnlineApplicationInstance { throw 'Access denied.' }
 
             { & $script:RunScript -Stage execute -InputJson (New-StageInput) } | Should -Throw
+        }
+
+        It 'surfaces a terminating error when an association lookup fails' {
+            Mock Get-CsOnlineApplicationInstance { @(New-SampleInstances)[0] }
+            Mock Get-CsOnlineApplicationInstanceAssociation { throw 'Access denied.' }
+
+            { & $script:RunScript -Stage execute -InputJson (New-StageInput) } | Should -Throw '*Access denied*'
         }
     }
 
