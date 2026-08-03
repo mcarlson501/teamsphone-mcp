@@ -38,12 +38,14 @@ function Add-Finding {
 }
 
 function Add-ReportFindings {
-    param([string]$Section, $Report)
+    param([string]$Section, $Report, [string[]]$ExcludeCodes = @())
     if ($null -eq $Report) { return }
     foreach ($finding in @(Get-PropertyValue -InputObject $Report -Name 'findings' -Default @())) {
+        $code = [string](Get-PropertyValue -InputObject $finding -Name 'code')
+        if ($code -in $ExcludeCodes) { continue }
         Add-Finding -Section $Section `
             -Severity ([string](Get-PropertyValue -InputObject $finding -Name 'severity')) `
-            -Code ([string](Get-PropertyValue -InputObject $finding -Name 'code')) `
+            -Code $code `
             -What ([string](Get-PropertyValue -InputObject $finding -Name 'what')) `
             -Why ([string](Get-PropertyValue -InputObject $finding -Name 'why')) `
             -Fix ([string](Get-PropertyValue -InputObject $finding -Name 'fix'))
@@ -74,33 +76,25 @@ switch ($Stage) {
         }
         Add-ReportFindings -Section 'emergencyCoverage' -Report $emergencyCoverage
 
-        $resourceAccounts = Get-HealthSection -Name 'resourceAccounts' -ScriptBlock {
-            Invoke-SiblingTool -ToolId 'list-resource-accounts' -ToolInput $passthrough
+        $orphanedObjects = Get-HealthSection -Name 'orphanedObjects' -ScriptBlock {
+            Invoke-SiblingTool -ToolId 'find-orphaned-objects' -ToolInput $passthrough
         }
-        if ($null -ne $resourceAccounts) {
-            $unattached = @($resourceAccounts.resourceAccounts | Where-Object { -not $_.attached })
-            if ($unattached.Count -gt 0) {
-                Add-Finding -Section 'resourceAccounts' -Severity 'warning' -Code 'unattachedResourceAccounts' `
-                    -What "$($unattached.Count) resource account(s) are not attached to a call queue or auto attendant." `
-                    -Why 'Unattached resource accounts consume administrative inventory and may indicate an incomplete or deleted call flow.' `
-                    -Fix 'Review list-resource-accounts and attach each account to its intended application or remove it.'
-            }
-        }
+        Add-ReportFindings -Section 'orphanedObjects' -Report $orphanedObjects -ExcludeCodes @('emptyCallQueue')
 
         $callQueues = Get-HealthSection -Name 'callQueues' -ScriptBlock {
             @(Invoke-WithRetry -ScriptBlock { Get-CsCallQueue -ErrorAction Stop })
         }
+        $callQueueHealth = [System.Collections.ArrayList]::new()
         if ($null -ne $callQueues) {
             foreach ($queue in $callQueues) {
-                $agents = @(Get-PropertyValue -InputObject $queue -Name 'Agents' -Default @())
-                if ($agents.Count -eq 0) {
-                    $name = [string](Get-PropertyValue -InputObject $queue -Name 'Name')
-                    if ([string]::IsNullOrWhiteSpace($name)) { $name = [string](Get-PropertyValue -InputObject $queue -Name 'Identity') }
-                    Add-Finding -Section 'callQueues' -Severity 'critical' -Code 'callQueueHasNoAgents' `
-                        -What "Call queue '$name' has no configured agents." `
-                        -Why 'Calls entering this queue cannot reach a person.' `
-                        -Fix "Use update-callqueue-members to add at least one reachable agent to '$name'."
+                $identity = [string](Get-PropertyValue -InputObject $queue -Name 'Identity')
+                if ([string]::IsNullOrWhiteSpace($identity)) { continue }
+                $queueReport = Get-HealthSection -Name "callQueue:$identity" -ScriptBlock {
+                    Invoke-SiblingTool -ToolId 'diagnose-callqueue-health' -ToolInput ($passthrough + @{ callQueueIdentity = $identity })
                 }
+                if ($null -eq $queueReport) { continue }
+                [void]$callQueueHealth.Add($queueReport)
+                Add-ReportFindings -Section 'callQueues' -Report $queueReport
             }
         }
 
@@ -133,8 +127,8 @@ switch ($Stage) {
                 numberUtilization = $numberUtilization
                 licenseUtilization = $licenseUtilization
                 emergencyCoverage = $emergencyCoverage
-                resourceAccounts = $resourceAccounts
-                callQueueCount = if ($null -eq $callQueues) { $null } else { $callQueues.Count }
+                orphanedObjects = $orphanedObjects
+                callQueues = @($callQueueHealth)
             }
         }
         return (Write-StageResult -Summary "Tenant health check found $criticalCount critical and $warningCount warning issue(s); $($script:Warnings.Count) section(s) degraded." -After $after)

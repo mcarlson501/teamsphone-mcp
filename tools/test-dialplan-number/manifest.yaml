@@ -1,0 +1,19 @@
+id: test-dialplan-number
+version: 1.0.0
+summary: Test how a dialed string normalizes for a Teams Phone user under their effective tenant dial plan, including the matched normalization rule and actionable findings.
+category: read
+riskTier: 0
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  userUpn: { type: string, format: upn, required: true }
+  dialedNumber: { type: string, required: true }
+  callerNumber: { type: string, required: false }
+redactParams: []
+maxBlastRadius: 0
+timeoutSeconds: 120

@@ -119,8 +119,8 @@ export ASPNETCORE_URLS='http://localhost:5111'
 dotnet run --project src/TeamsPhoneMcp.Host
 ```
 
-On startup you should see `Loaded 33 tool manifests` and `Validated 33 tool manifests
-against 33 registered MCP tools`. In another terminal, verify the auth gate:
+On startup you should see `Loaded 38 tool manifests` and `Validated 38 tool manifests
+against 38 registered MCP tools`. In another terminal, verify the auth gate:
 
 ```bash
 # No token → 401.
@@ -289,10 +289,12 @@ set -a; source .env.integration; set +a
 ### Option A5 — diagnostics and reporting (M5.5 sign-off)
 
 `tests/unit/M55IntegrationTests.cs` calls the user diagnostic, tenant health check,
-number/license/emergency/policy reports, and call-flow trace against the dev tenant. It
-asserts actionable findings and one scrubbed audit record per call. The test discovers a
-numbered, attached resource account automatically; set an explicit number only when the
-tenant has multiple call flows and you need a stable fixture.
+number/license/emergency/policy reports, call-flow trace, PSTN usage, and call-quality
+summary against the dev tenant. It asserts actionable findings and one scrubbed audit
+record per call. The test discovers a numbered, attached resource account automatically;
+set an explicit number only when the tenant has multiple call flows and you need a stable
+fixture. The Entra app must have admin-consented `CallRecords.Read.All` in addition to the
+baseline permissions in [setup-entra-app.md](setup-entra-app.md).
 
 The configured user and tenant should contain at least one deliberate voice issue so the
 test can verify remediation text rather than only an empty healthy result.

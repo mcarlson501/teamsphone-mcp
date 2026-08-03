@@ -358,7 +358,7 @@ All 10 Phase A tools + Pester suites + the §9 audit pipeline (JSONL schema, red
 
 **M5 — Remaining Phase D write tools** ✅ Pester green; integration happy-paths green; session/server what-if modes demonstrated blocking execution.
 
-**M5.5 — Diagnostics & reporting (Phases B–C) + Phase F audit tools**
+**M5.5 — Diagnostics & reporting (Phases B–C) + Phase F audit tools (complete)**
 Read-only, so lower risk than M5 but the highest adoption value: diagnose-user-voice, trace-call-flow, run-tenant-health-check, the report-* set, and query-audit-log/get-change-detail/export-audit-report. ✅ Health check against the deliberately misconfigured dev tenant surfaces seeded faults with correct findings/fix text; export-audit-report renders the M3–M5 change history.
 
 **M6 — Hardening + docs + container**

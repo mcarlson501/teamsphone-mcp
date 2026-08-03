@@ -35,6 +35,8 @@ credentials. Tenant credentials are supplied entirely through local configuratio
 - Ten Phase A read-only Teams Phone tools, each with its own Pester suite.
 - User voice diagnosis, recursive AA/CQ call-flow tracing, and a severity-ranked
   tenant health check.
+- Dial-plan testing, call-queue health, orphan discovery, merged PSTN usage, and
+  per-user call-quality diagnostics with actionable findings.
 - Number, license, emergency-coverage, policy-assignment, and change-history reports.
 - All ten Phase D write tools: eight atomic user-level operations and the
   `onboard-voice-user` / `offboard-voice-user` composites, each exercising the safe
@@ -48,8 +50,7 @@ credentials. Tenant credentials are supplied entirely through local configuratio
 
 ## Not implemented yet
 
-- Specialized Phase B diagnostics (`test-dialplan-number`, call queue health, PSTN
-  usage, call quality, and orphan discovery) and Phase E shared-object writes.
+- Phase E shared-object writes.
 - Container packaging or a supported release artifact.
 - Hash-chained audit records and OpenTelemetry export (planned post-v1).
 
@@ -81,7 +82,12 @@ Pester suite; adding a tool never requires editing the host engine.
 | ---- | --------------- |
 | `diagnose-user-voice` | Ordered license, enterprise voice, number, policy, dial-plan, and emergency-location findings with fixes |
 | `trace-call-flow` | A number-to-resource-account AA/CQ graph with agents, terminal targets, loop detection, and broken-reference findings |
-| `run-tenant-health-check` | Severity-ranked findings across number capacity, licenses, emergency coverage, resource accounts, and call queues |
+| `test-dialplan-number` | Effective dial-plan normalization and the rule that matched a dialed string for a user |
+| `diagnose-callqueue-health` | Agent opt-in, identity resolution, presence starvation, and overflow/timeout target findings |
+| `get-pstn-usage` | Calling Plan, Operator Connect, and Direct Routing call rows, totals, costs, and failure findings for up to 90 days (`fromUtc` inclusive, `toUtc` exclusive) |
+| `get-call-quality-summary` | Up to 30 days of per-user packet loss, jitter, round-trip time, degradation, and concealment evidence from Graph call records (`fromUtc` inclusive, `toUtc` exclusive) |
+| `find-orphaned-objects` | Broken AA targets, incomplete resource accounts/users, empty queues, and unused custom policies |
+| `run-tenant-health-check` | Severity-ranked findings across capacity, licensing, emergency coverage, orphan discovery, and full queue health |
 | `report-number-utilization` | Assignment and availability totals by number type and country |
 | `report-license-utilization` | Observed Phone System/Calling Plan assignments and licensed users not enabled for voice |
 | `report-emergency-coverage` | Enterprise-voice users with covered, missing, unknown, or unvalidated locations (paged) |
@@ -208,7 +214,7 @@ dotnet run --project src/TeamsPhoneMcp.Host -- --stdio
 3. Choose transport **Streamable HTTP**, URL `http://127.0.0.1:5199/mcp`.
 4. Under **Authentication**, add an `Authorization` header using the `Bearer`
    scheme followed by your configured token.
-5. Connect, then **List Tools** → you should see the 33 registered tools, including
+5. Connect, then **List Tools** → you should see the 38 registered tools, including
   `ping`, the tenant reads/diagnostics/reports, local audit tools, and Phase D writes.
 6. Call `mock-write-user-policy` once without `dryRun:false` to get a
    `confirmationToken`, then call again with `dryRun:false` and that token to

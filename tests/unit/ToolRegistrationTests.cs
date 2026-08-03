@@ -28,11 +28,15 @@ public class ToolRegistrationTests
             [
                 "assign-phone-number",
                 "check-user-licensing",
+                "diagnose-callqueue-health",
                 "diagnose-user-voice",
                 "export-audit-report",
+                "find-orphaned-objects",
                 "get-autoattendant-config",
+                "get-call-quality-summary",
                 "get-callqueue-config",
                 "get-change-detail",
+                "get-pstn-usage",
                 "get-schedules",
                 "get-tenant-voice-snapshot",
                 "get-user-voice-config",
@@ -54,6 +58,7 @@ public class ToolRegistrationTests
                 "report-policy-assignments",
                 "run-tenant-health-check",
                 "set-caller-id-assignment",
+                "test-dialplan-number",
                 "trace-call-flow",
                 "update-callqueue-members",
                 "update-user-calling-policies",
@@ -70,6 +75,8 @@ public class ToolRegistrationTests
         Assert.IsType<ManifestValidatingMcpServerTool>(tools.Single(t => t.ProtocolTool.Name == "get-change-detail"));
         Assert.IsType<ManifestValidatingMcpServerTool>(tools.Single(t => t.ProtocolTool.Name == "export-audit-report"));
         Assert.IsType<ManifestValidatingMcpServerTool>(tools.Single(t => t.ProtocolTool.Name == "report-change-history"));
+        Assert.IsType<ManifestValidatingMcpServerTool>(tools.Single(t => t.ProtocolTool.Name == "get-pstn-usage"));
+        Assert.IsType<ManifestValidatingMcpServerTool>(tools.Single(t => t.ProtocolTool.Name == "get-call-quality-summary"));
         Assert.IsType<ManifestPipelineTool>(tools.Single(t => t.ProtocolTool.Name == "get-user-voice-config"));
         Assert.IsType<ManifestPipelineTool>(tools.Single(t => t.ProtocolTool.Name == "assign-phone-number"));
     }

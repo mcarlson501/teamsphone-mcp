@@ -1,0 +1,19 @@
+id: get-call-quality-summary
+version: 1.0.0
+summary: Analyze up to 30 days of a user's recent Microsoft Graph call records (fromUtc inclusive, toUtc exclusive) for packet loss, jitter, round-trip time, audio degradation, and concealed samples.
+category: read
+riskTier: 0
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  userUpn: { type: string, format: upn, required: true }
+  fromUtc: { type: string, required: true }
+  toUtc: { type: string, required: true }
+redactParams: []
+maxBlastRadius: 0
+timeoutSeconds: 180

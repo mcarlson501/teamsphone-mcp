@@ -1,0 +1,17 @@
+id: diagnose-callqueue-health
+version: 1.0.0
+summary: Diagnose whether a call queue can reach agents and fallback targets by checking membership, opt-in state, presence routing, and overflow and timeout destinations.
+category: read
+riskTier: 0
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  callQueueIdentity: { type: string, required: true }
+redactParams: []
+maxBlastRadius: 0
+timeoutSeconds: 180
