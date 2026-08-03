@@ -78,8 +78,9 @@ function Resolve-CallTarget {
         '^(?i)User$' { Resolve-UserTarget -ObjectId $targetId -FromNodeId $FromNodeId -Relation $Relation }
         '^(?i)Phone$' {
             $number = ConvertTo-E164Number -Value $targetId
-            $nodeId = "externalNumber:$targetId"
-            Add-TraceNode -Id $nodeId -Type 'externalNumber' -Name $(if ($null -ne $number) { $number } else { $targetId }) -Status 'terminal'
+            $normalizedId = if ($null -ne $number) { $number } else { $targetId }
+            $nodeId = "externalNumber:$normalizedId"
+            Add-TraceNode -Id $nodeId -Type 'externalNumber' -Name $normalizedId -Status 'terminal'
             Add-TraceEdge -From $FromNodeId -To $nodeId -Relation $Relation
         }
         '^(?i)Voicemail$' {

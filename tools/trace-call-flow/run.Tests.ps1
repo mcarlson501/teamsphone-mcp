@@ -71,4 +71,26 @@ Describe 'trace-call-flow' {
         $parsed.after.findings.code | Should -Contain 'resourceAccountNotFound'
         ($parsed.after.nodes | Where-Object { $_.id -eq 'resourceAccount:ra-cq' }).status | Should -Be 'unresolved'
     }
+
+    It 'deduplicates equivalent external phone target formats' {
+        Mock Get-CsAutoAttendant {
+            [PSCustomObject]@{
+                Identity = 'aa-1'; Name = 'Main'
+                DefaultCallFlow = [PSCustomObject]@{
+                    Menu = [PSCustomObject]@{ MenuOptions = @(
+                        [PSCustomObject]@{ DtmfResponse = 'Tone1'; Action = 'TransferCallToTarget'; CallTarget = [PSCustomObject]@{ Id = 'tel:+15550000005'; Type = 'Phone' } },
+                        [PSCustomObject]@{ DtmfResponse = 'Tone1'; Action = 'TransferCallToTarget'; CallTarget = [PSCustomObject]@{ Id = '+1 (555) 000-0005'; Type = 'Phone' } }
+                    ) }
+                }
+                CallFlows = @()
+            }
+        }
+
+        $parsed = & $script:RunScript -Stage execute -InputJson (New-Input) | ConvertFrom-Json
+
+        $externalNumbers = @($parsed.after.nodes | Where-Object { $_.type -eq 'externalNumber' })
+        $externalNumbers | Should -HaveCount 1
+        $externalNumbers[0].id | Should -Be 'externalNumber:+15550000005'
+        @($parsed.after.edges | Where-Object { $_.to -eq 'externalNumber:+15550000005' }) | Should -HaveCount 1
+    }
 }
