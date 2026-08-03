@@ -1,0 +1,16 @@
+id: find-orphaned-objects
+version: 1.0.0
+summary: Find orphaned Teams Phone configuration including incomplete resource accounts, broken auto-attendant targets, empty call queues, voice-enabled users without numbers, and unassigned custom policies.
+category: read
+riskTier: 0
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+redactParams: []
+maxBlastRadius: 0
+timeoutSeconds: 300

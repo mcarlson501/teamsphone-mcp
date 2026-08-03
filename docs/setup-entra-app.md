@@ -43,12 +43,15 @@ in **application** mode. That requires both an API permission and a directory ro
    (`get-user-voice-config`) the minimum is typically:
    - `User.Read.All`
    - `Organization.Read.All`
+  - `CallRecords.Read.All` for `get-pstn-usage` and `get-call-quality-summary`
 4. Select **Add permissions**, then **Grant admin consent for &lt;tenant&gt;**.
 
 > The Phase A read tools (phone numbers, call queues, auto attendants, licensing,
 > emergency addresses, voice policies, resource accounts, schedules, and the tenant
 > snapshot) use **Teams PowerShell cmdlets only** — they add no further Graph
-> permissions beyond the two above.
+> permissions. `CallRecords.Read.All` is an application-only permission and requires
+> admin consent; detailed call records remain available for 30 days, while PSTN usage
+> requests may span at most 90 days.
 
 ### 2b. Teams admin role
 

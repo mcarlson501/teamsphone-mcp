@@ -30,11 +30,15 @@ public class McpHostAcceptanceTests : IClassFixture<WebApplicationFactory<Progra
             [
                 "assign-phone-number",
                 "check-user-licensing",
+                "diagnose-callqueue-health",
                 "diagnose-user-voice",
                 "export-audit-report",
+                "find-orphaned-objects",
                 "get-autoattendant-config",
+                "get-call-quality-summary",
                 "get-callqueue-config",
                 "get-change-detail",
+                "get-pstn-usage",
                 "get-schedules",
                 "get-tenant-voice-snapshot",
                 "get-user-voice-config",
@@ -56,6 +60,7 @@ public class McpHostAcceptanceTests : IClassFixture<WebApplicationFactory<Progra
                 "report-policy-assignments",
                 "run-tenant-health-check",
                 "set-caller-id-assignment",
+                "test-dialplan-number",
                 "trace-call-flow",
                 "update-callqueue-members",
                 "update-user-calling-policies",
@@ -112,6 +117,17 @@ public class McpHostAcceptanceTests : IClassFixture<WebApplicationFactory<Progra
         var removeNumber = tools.Single(tool => tool.Name == "remove-phone-number").ProtocolTool;
         Assert.True(removeNumber.Annotations?.DestructiveHint);
         Assert.True(removeNumber.InputSchema.GetProperty("properties").TryGetProperty("phoneNumber", out _));
+
+        var pstnUsage = tools.Single(tool => tool.Name == "get-pstn-usage").ProtocolTool;
+        Assert.True(pstnUsage.Annotations?.ReadOnlyHint);
+        var pstnProperties = pstnUsage.InputSchema.GetProperty("properties");
+        Assert.True(pstnProperties.TryGetProperty("fromUtc", out _));
+        Assert.True(pstnProperties.TryGetProperty("toUtc", out _));
+        Assert.True(pstnProperties.TryGetProperty("phoneNumber", out _));
+
+        var callQuality = tools.Single(tool => tool.Name == "get-call-quality-summary").ProtocolTool;
+        Assert.True(callQuality.Annotations?.ReadOnlyHint);
+        Assert.True(callQuality.InputSchema.GetProperty("properties").TryGetProperty("userUpn", out _));
     }
 
     [Fact]

@@ -70,6 +70,7 @@ public static class ToolRegistration
         builder.Services.AddHostedService<TenantSessionCleanupService>();
         builder.Services.TryAddSingleton<IStageExecutor, UnconfiguredStageExecutor>();
         builder.Services.TryAddSingleton<IToolPipelineRunner, ToolPipelineRunner>();
+        builder.Services.TryAddSingleton<IGraphCallRecordsClient, UnconfiguredGraphCallRecordsClient>();
 
         // Fail-safe audit defaults: the host swaps these for the JSONL pipeline
         // via AddTeamsPhoneAudit, so unit tests never touch the filesystem.
@@ -105,6 +106,8 @@ public static class ToolRegistration
         builder.Services.TryAddSingleton<ICredentialProvider, LocalCredentialProvider>();
         builder.Services.RemoveAll<ITenantSessionFactory>();
         builder.Services.AddSingleton<ITenantSessionFactory, PowerShellTenantSessionFactory>();
+        builder.Services.RemoveAll<IGraphCallRecordsClient>();
+        builder.Services.AddSingleton<IGraphCallRecordsClient, GraphCallRecordsClient>();
 
         return builder;
     }
@@ -145,6 +148,8 @@ public static class ToolRegistration
                 GetChangeDetailMcpServerTool.ToolId => new GetChangeDetailMcpServerTool(manifest),
                 ExportAuditReportMcpServerTool.ToolId => new ExportAuditReportMcpServerTool(manifest),
                 ExportAuditReportMcpServerTool.ReportChangeHistoryToolId => new ExportAuditReportMcpServerTool(manifest),
+                GetPstnUsageMcpServerTool.ToolId => new GetPstnUsageMcpServerTool(manifest),
+                GetCallQualitySummaryMcpServerTool.ToolId => new GetCallQualitySummaryMcpServerTool(manifest),
                 _ => null,
             };
             if (localAuditTool is not null)

@@ -1,0 +1,20 @@
+id: get-pstn-usage
+version: 1.0.0
+summary: Report Calling Plan, Operator Connect, and Direct Routing PSTN calls for a UTC date range of up to 90 days (fromUtc inclusive, toUtc exclusive), optionally filtered by user or phone number.
+category: read
+riskTier: 0
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  fromUtc: { type: string, required: true }
+  toUtc: { type: string, required: true }
+  userUpn: { type: string, format: upn, required: false }
+  phoneNumber: { type: string, required: false }
+redactParams: []
+maxBlastRadius: 0
+timeoutSeconds: 180

@@ -93,6 +93,30 @@ public sealed class M55IntegrationTests : IDisposable
             return envelope;
         }
 
+        async Task<JsonElement> CallGraphAndAssertAsync(
+            string toolId,
+            Dictionary<string, object?> arguments)
+        {
+            arguments["tenantId"] = tenantId;
+            arguments["credentialRef"] = credentialRef;
+
+            var result = await client.CallToolAsync(toolId, arguments);
+            var payloadJson = result.StructuredContent?.GetRawText() ?? "<no structured content>";
+            Assert.False(result.IsError, $"{toolId} returned an error.\nPayload: {payloadJson}");
+            Assert.NotNull(result.StructuredContent);
+
+            var payload = result.StructuredContent.Value;
+            Assert.Equal("succeeded", payload.GetProperty("status").GetString());
+            Assert.Equal(toolId, payload.GetProperty("toolId").GetString());
+            Assert.False(string.IsNullOrWhiteSpace(payload.GetProperty("summary").GetString()));
+            var correlationId = payload.GetProperty("correlationId").GetString();
+            Assert.False(string.IsNullOrWhiteSpace(correlationId));
+            executedTools.Add(toolId);
+            correlationIds.Add(correlationId!);
+            _output.WriteLine($"{toolId}: {payload.GetProperty("summary").GetString()}");
+            return payload;
+        }
+
         var diagnosis = await CallAndAssertAsync(
             "diagnose-user-voice",
             new() { ["userUpn"] = userUpn });
@@ -116,6 +140,23 @@ public sealed class M55IntegrationTests : IDisposable
 
         var health = await CallAndAssertAsync("run-tenant-health-check");
         AssertActionableFindings(health, expectFinding: true);
+
+        var graphToUtc = DateTimeOffset.UtcNow;
+        var graphFromUtc = graphToUtc.AddDays(-7);
+        var graphRange = new Dictionary<string, object?>
+        {
+            ["fromUtc"] = graphFromUtc.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'"),
+            ["toUtc"] = graphToUtc.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'"),
+        };
+        var pstnUsage = await CallGraphAndAssertAsync(
+            "get-pstn-usage",
+            new Dictionary<string, object?>(graphRange) { ["userUpn"] = userUpn });
+        Assert.Equal(JsonValueKind.Array, pstnUsage.GetProperty("calls").ValueKind);
+
+        var callQuality = await CallGraphAndAssertAsync(
+            "get-call-quality-summary",
+            new Dictionary<string, object?>(graphRange) { ["userUpn"] = userUpn });
+        Assert.Equal(JsonValueKind.Array, callQuality.GetProperty("findings").ValueKind);
 
         if (string.IsNullOrWhiteSpace(dialedNumber))
         {
