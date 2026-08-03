@@ -39,7 +39,10 @@ credential is not configured).
 # Build first (warnings are errors — keep it clean).
 dotnet build TeamsPhoneMcp.sln
 
-# Run everything.
+# Run the complete offline suite even if live-test variables are exported.
+dotnet test TeamsPhoneMcp.sln --filter 'FullyQualifiedName!~IntegrationTests'
+
+# Run everything, including gated live tests when their variables are present.
 dotnet test TeamsPhoneMcp.sln
 ```
 
@@ -62,7 +65,7 @@ dotnet test tests/unit --filter FullyQualifiedName~Audit
 dotnet test tests/unit --filter FullyQualifiedName~WritePipelineAcceptanceTests
 ```
 
-These tests use **no tenant and no credentials** — the fail-closed test deliberately calls
+The offline-filtered suite uses **no tenant and no credentials** — the fail-closed test deliberately calls
 `get-user-voice-config` with an unconfigured credential and asserts an `authenticationFailed`
 envelope whose client-facing message contains no credential reference.
 
@@ -116,8 +119,8 @@ export ASPNETCORE_URLS='http://localhost:5111'
 dotnet run --project src/TeamsPhoneMcp.Host
 ```
 
-On startup you should see `Loaded 22 tool manifests` and `Validated 22 tool manifests
-against 22 registered MCP tools`. In another terminal, verify the auth gate:
+On startup you should see `Loaded 33 tool manifests` and `Validated 33 tool manifests
+against 33 registered MCP tools`. In another terminal, verify the auth gate:
 
 ```bash
 # No token → 401.
@@ -282,6 +285,25 @@ set -a; source .env.integration; set +a
 > an emergency location as the fixture: Calling Plan assignment cannot be restored
 > without one. If restoration fails, preserve the failing envelope and restore from
 > its `diff.before` snapshot before running another live write test.
+
+### Option A5 — diagnostics and reporting (M5.5 sign-off)
+
+`tests/unit/M55IntegrationTests.cs` calls the user diagnostic, tenant health check,
+number/license/emergency/policy reports, and call-flow trace against the dev tenant. It
+asserts actionable findings and one scrubbed audit record per call. The test discovers a
+numbered, attached resource account automatically; set an explicit number only when the
+tenant has multiple call flows and you need a stable fixture.
+
+The configured user and tenant should contain at least one deliberate voice issue so the
+test can verify remediation text rather than only an empty healthy result.
+
+```bash
+# Optional E.164 override for trace-call-flow discovery.
+TEAMSPHONE_MCP_IT_DIALED_NUMBER='+15551234567'
+
+set -a; source .env.integration; set +a
+./scripts/live-test.sh --filter FullyQualifiedName~M55IntegrationTests -l 'console;verbosity=detailed'
+```
 
 ### Option B — a real MCP client against the running server
 

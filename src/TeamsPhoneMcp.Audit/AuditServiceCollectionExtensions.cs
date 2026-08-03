@@ -38,6 +38,8 @@ public static class AuditServiceCollectionExtensions
         services.AddSingleton<IAuditSink, JsonlAuditSink>();
         services.RemoveAll<IAuditSnapshotStore>();
         services.AddSingleton<IAuditSnapshotStore, FileAuditSnapshotStore>();
+        services.RemoveAll<IAuditQueryService>();
+        services.AddSingleton<IAuditQueryService, FileAuditQueryService>();
 
         services.AddSingleton<AuditRetentionSweeper>();
         services.AddHostedService<AuditRetentionSweeperService>();

@@ -1,0 +1,16 @@
+id: run-tenant-health-check
+version: 1.0.0
+summary: Run a tenant-wide Teams Phone misconfiguration check and return severity-ranked findings with remediation pointers.
+category: read
+riskTier: 0
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+redactParams: []
+maxBlastRadius: 0
+timeoutSeconds: 300

@@ -1,0 +1,16 @@
+id: report-license-utilization
+version: 1.0.0
+summary: Report observed Teams Phone license assignments and identify licensed users who are not enabled for enterprise voice.
+category: read
+riskTier: 0
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+redactParams: []
+maxBlastRadius: 0
+timeoutSeconds: 180

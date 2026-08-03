@@ -30,8 +30,11 @@ public class McpHostAcceptanceTests : IClassFixture<WebApplicationFactory<Progra
             [
                 "assign-phone-number",
                 "check-user-licensing",
+                "diagnose-user-voice",
+                "export-audit-report",
                 "get-autoattendant-config",
                 "get-callqueue-config",
+                "get-change-detail",
                 "get-schedules",
                 "get-tenant-voice-snapshot",
                 "get-user-voice-config",
@@ -44,8 +47,16 @@ public class McpHostAcceptanceTests : IClassFixture<WebApplicationFactory<Progra
                 "offboard-voice-user",
                 "onboard-voice-user",
                 "ping",
+                "query-audit-log",
                 "remove-phone-number",
+                "report-change-history",
+                "report-emergency-coverage",
+                "report-license-utilization",
+                "report-number-utilization",
+                "report-policy-assignments",
+                "run-tenant-health-check",
                 "set-caller-id-assignment",
+                "trace-call-flow",
                 "update-callqueue-members",
                 "update-user-calling-policies",
                 "update-user-emergency-location",
@@ -58,6 +69,19 @@ public class McpHostAcceptanceTests : IClassFixture<WebApplicationFactory<Progra
         Assert.False(ping.Annotations?.DestructiveHint);
         Assert.True(ping.Annotations?.IdempotentHint);
         Assert.True(ping.InputSchema.GetProperty("properties").TryGetProperty("message", out _));
+
+        var queryAudit = tools.Single(tool => tool.Name == "query-audit-log").ProtocolTool;
+        Assert.True(queryAudit.Annotations?.ReadOnlyHint);
+        var queryProperties = queryAudit.InputSchema.GetProperty("properties");
+        Assert.True(queryProperties.TryGetProperty("tenantId", out _));
+        Assert.Equal(1, queryProperties.GetProperty("pageSize").GetProperty("minimum").GetInt32());
+        Assert.Equal(200, queryProperties.GetProperty("pageSize").GetProperty("maximum").GetInt32());
+
+        var exportAudit = tools.Single(tool => tool.Name == "export-audit-report").ProtocolTool;
+        Assert.Equal(
+            ["markdown", "csv"],
+            exportAudit.InputSchema.GetProperty("properties").GetProperty("format")
+                .GetProperty("enum").EnumerateArray().Select(value => value.GetString()));
 
         var mockWrite = tools.Single(tool => tool.Name == "mock-write-user-policy").ProtocolTool;
         Assert.False(mockWrite.Annotations?.ReadOnlyHint);

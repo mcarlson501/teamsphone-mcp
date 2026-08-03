@@ -114,6 +114,28 @@ tenant with `toolId: "audit-retention-sweep"`.
 
 ---
 
+## Querying through MCP
+
+Three tier-0 tools expose the configured local audit root without opening a tenant
+PowerShell session:
+
+| Tool | Purpose |
+| ---- | ------- |
+| `query-audit-log` | Filter by tenant, UTC range, tool, status, or client; returns newest-first records with signed pagination |
+| `get-change-detail` | Retrieve one tenant-scoped record and its available before/after snapshots by correlation id |
+| `export-audit-report` | Render all records in an inclusive UTC range as Markdown or CSV |
+
+`report-change-history` is a report-oriented alias of `export-audit-report`. Both use
+the same tenant-bound query and renderer. Exported reports omit raw error messages;
+they include the stable error code instead.
+
+Continuation tokens are HMAC-signed and bound to the canonical query filters. A token
+cannot be reused with another tenant or changed filter set. Snapshot paths are resolved
+under the requested tenant directory, so a stored path cannot escape into another
+tenant's records.
+
+---
+
 ## Verifying the audit trail
 
 Automated coverage lives in:

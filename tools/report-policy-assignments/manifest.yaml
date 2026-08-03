@@ -1,0 +1,19 @@
+id: report-policy-assignments
+version: 1.0.0
+summary: Report the effective voice-policy assignment matrix for tenant users, exportable as structured data, Markdown, or CSV.
+category: read
+riskTier: 0
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  format: { type: string, required: false, allowedValues: [json, markdown, csv] }
+  pageSize: { type: integer, required: false, minimum: 1, maximum: 200 }
+  continuationToken: { type: string, required: false }
+redactParams: []
+maxBlastRadius: 0
+timeoutSeconds: 240
