@@ -17,7 +17,7 @@ execution.
 The repository is tenant-agnostic and contains no customer data or baked-in
 credentials. Tenant credentials are supplied entirely through local configuration.
 
-> **Project status:** Milestones M1–M5 are complete. Interfaces, manifests, and
+> **Project status:** Milestones M1–M5.5 are complete. Interfaces, manifests, and
 > configuration may change without backward compatibility before the first release.
 
 ## What works today
@@ -33,18 +33,23 @@ credentials. Tenant credentials are supplied entirely through local configuratio
   read/write coordination, idle expiry, LRU eviction, and fatal-session replacement.
 - A read-only `ping` tool and `mock-write-user-policy` safety-flow demonstration.
 - Ten Phase A read-only Teams Phone tools, each with its own Pester suite.
+- User voice diagnosis, recursive AA/CQ call-flow tracing, and a severity-ranked
+  tenant health check.
+- Number, license, emergency-coverage, policy-assignment, and change-history reports.
 - All ten Phase D write tools: eight atomic user-level operations and the
   `onboard-voice-user` / `offboard-voice-user` composites, each exercising the safe
   stage pipeline (snapshot → preflight → dry-run → execute → verify → rollback) — see
   [`docs/write-tools.md`](./docs/write-tools.md).
 - A local JSONL audit trail with parameter redaction, correlation ids, snapshot
   storage, and a retention sweeper — see [`docs/audit.md`](./docs/audit.md).
+- Tenant-scoped local audit query, change-detail, and Markdown/CSV export tools with
+  signed, filter-bound pagination.
 - Release build and test coverage in GitHub Actions.
 
 ## Not implemented yet
 
-- Phase B–C diagnostics and reports, Phase E shared-object writes, and Phase F
-  audit-query tools.
+- Specialized Phase B diagnostics (`test-dialplan-number`, call queue health, PSTN
+  usage, call quality, and orphan discovery) and Phase E shared-object writes.
 - Container packaging or a supported release artifact.
 - Hash-chained audit records and OpenTelemetry export (planned post-v1).
 
@@ -69,6 +74,31 @@ roadmap. Issues and focused contributions are welcome; review
 
 Each tool is a `manifest.yaml` + `run.ps1` pair under [`tools/`](./tools) with its own
 Pester suite; adding a tool never requires editing the host engine.
+
+## Diagnostics and reports (tier 0)
+
+| Tool | What it returns |
+| ---- | --------------- |
+| `diagnose-user-voice` | Ordered license, enterprise voice, number, policy, dial-plan, and emergency-location findings with fixes |
+| `trace-call-flow` | A number-to-resource-account AA/CQ graph with agents, terminal targets, loop detection, and broken-reference findings |
+| `run-tenant-health-check` | Severity-ranked findings across number capacity, licenses, emergency coverage, resource accounts, and call queues |
+| `report-number-utilization` | Assignment and availability totals by number type and country |
+| `report-license-utilization` | Observed Phone System/Calling Plan assignments and licensed users not enabled for voice |
+| `report-emergency-coverage` | Enterprise-voice users with covered, missing, unknown, or unvalidated locations (paged) |
+| `report-policy-assignments` | User-by-policy matrix as structured data, Markdown, or CSV (paged) |
+| `report-change-history` | Markdown or CSV generated from this server's tenant-scoped local audit trail |
+
+## Local audit tools (tier 0)
+
+| Tool | What it returns |
+| ---- | --------------- |
+| `query-audit-log` | Filtered, newest-first local audit records with signed continuation tokens |
+| `get-change-detail` | One full record plus available before/after snapshots |
+| `export-audit-report` | Markdown or CSV for a tenant and UTC period |
+
+These tools read only the configured local audit root and never open a tenant
+PowerShell session. `report-change-history` is the report-oriented alias of the same
+secure export path.
 
 ## Write tools (MACD)
 
@@ -178,8 +208,8 @@ dotnet run --project src/TeamsPhoneMcp.Host -- --stdio
 3. Choose transport **Streamable HTTP**, URL `http://127.0.0.1:5199/mcp`.
 4. Under **Authentication**, add an `Authorization` header using the `Bearer`
    scheme followed by your configured token.
-5. Connect, then **List Tools** → you should see the 22 registered tools, including
-  `ping`, the Phase A reads, and the Phase D writes.
+5. Connect, then **List Tools** → you should see the 33 registered tools, including
+  `ping`, the tenant reads/diagnostics/reports, local audit tools, and Phase D writes.
 6. Call `mock-write-user-policy` once without `dryRun:false` to get a
    `confirmationToken`, then call again with `dryRun:false` and that token to
    execute the mocked write. Changing `targetUserUpn`, `policyName`, or
@@ -208,8 +238,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:5199/mcp \
 
 ## Next milestone
 
-M5.5 adds the Phase B–C diagnostics and reports plus local Phase F audit-query tools.
-M6 then hardens packaging, documentation, CI, and the first supported container release.
+M6 hardens packaging, documentation, CI, and the first supported container release.
 
 ## License
 

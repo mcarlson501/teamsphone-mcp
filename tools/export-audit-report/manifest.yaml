@@ -1,0 +1,18 @@
+id: export-audit-report
+version: 1.0.0
+summary: Export this server's local audit history for one tenant and UTC period as Markdown or CSV.
+category: read
+riskTier: 0
+telephonyModels: []
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  fromUtc: { type: string, required: true }
+  toUtc: { type: string, required: true }
+  format: { type: string, required: true, allowedValues: [markdown, csv] }
+redactParams: []
+maxBlastRadius: 0
+timeoutSeconds: 60

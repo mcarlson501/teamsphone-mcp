@@ -1,0 +1,16 @@
+id: get-change-detail
+version: 1.0.0
+summary: Retrieve one full local audit record and its available before and after snapshots by correlation ID.
+category: read
+riskTier: 0
+telephonyModels: []
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  correlationId: { type: string, required: true }
+redactParams: []
+maxBlastRadius: 0
+timeoutSeconds: 30

@@ -28,8 +28,11 @@ public class ToolRegistrationTests
             [
                 "assign-phone-number",
                 "check-user-licensing",
+                "diagnose-user-voice",
+                "export-audit-report",
                 "get-autoattendant-config",
                 "get-callqueue-config",
+                "get-change-detail",
                 "get-schedules",
                 "get-tenant-voice-snapshot",
                 "get-user-voice-config",
@@ -42,8 +45,16 @@ public class ToolRegistrationTests
                 "offboard-voice-user",
                 "onboard-voice-user",
                 "ping",
+                "query-audit-log",
                 "remove-phone-number",
+                "report-change-history",
+                "report-emergency-coverage",
+                "report-license-utilization",
+                "report-number-utilization",
+                "report-policy-assignments",
+                "run-tenant-health-check",
                 "set-caller-id-assignment",
+                "trace-call-flow",
                 "update-callqueue-members",
                 "update-user-calling-policies",
                 "update-user-emergency-location",
@@ -55,6 +66,10 @@ public class ToolRegistrationTests
         // (run.ps1 present) auto-register as pipeline tools.
         Assert.IsType<ManifestValidatingMcpServerTool>(tools.Single(t => t.ProtocolTool.Name == "ping"));
         Assert.IsType<ManifestValidatingMcpServerTool>(tools.Single(t => t.ProtocolTool.Name == "mock-write-user-policy"));
+        Assert.IsType<ManifestValidatingMcpServerTool>(tools.Single(t => t.ProtocolTool.Name == "query-audit-log"));
+        Assert.IsType<ManifestValidatingMcpServerTool>(tools.Single(t => t.ProtocolTool.Name == "get-change-detail"));
+        Assert.IsType<ManifestValidatingMcpServerTool>(tools.Single(t => t.ProtocolTool.Name == "export-audit-report"));
+        Assert.IsType<ManifestValidatingMcpServerTool>(tools.Single(t => t.ProtocolTool.Name == "report-change-history"));
         Assert.IsType<ManifestPipelineTool>(tools.Single(t => t.ProtocolTool.Name == "get-user-voice-config"));
         Assert.IsType<ManifestPipelineTool>(tools.Single(t => t.ProtocolTool.Name == "assign-phone-number"));
     }

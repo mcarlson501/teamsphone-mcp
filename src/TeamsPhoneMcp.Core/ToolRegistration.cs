@@ -75,6 +75,7 @@ public static class ToolRegistration
         // via AddTeamsPhoneAudit, so unit tests never touch the filesystem.
         builder.Services.TryAddSingleton<IAuditSink, NullAuditSink>();
         builder.Services.TryAddSingleton<IAuditSnapshotStore, NullAuditSnapshotStore>();
+        builder.Services.TryAddSingleton<IAuditQueryService, NullAuditQueryService>();
         builder.Services.TryAddSingleton<IToolAuditRecorder, ToolAuditRecorder>();
         builder.Services
             .AddOptions<PowerShellTenantConnectionOptions>()
@@ -138,6 +139,21 @@ public static class ToolRegistration
 
         foreach (var manifest in catalog.All)
         {
+            McpServerTool? localAuditTool = manifest.Id switch
+            {
+                QueryAuditLogMcpServerTool.ToolId => new QueryAuditLogMcpServerTool(manifest),
+                GetChangeDetailMcpServerTool.ToolId => new GetChangeDetailMcpServerTool(manifest),
+                ExportAuditReportMcpServerTool.ToolId => new ExportAuditReportMcpServerTool(manifest),
+                ExportAuditReportMcpServerTool.ReportChangeHistoryToolId => new ExportAuditReportMcpServerTool(manifest),
+                _ => null,
+            };
+            if (localAuditTool is not null)
+            {
+                services.AddSingleton<McpServerTool>(
+                    new ManifestValidatingMcpServerTool(localAuditTool));
+                continue;
+            }
+
             var scriptPath = Path.Combine(toolsRoot, manifest.Id, ToolScriptLocator.ScriptFileName);
             if (!File.Exists(scriptPath))
             {

@@ -1,0 +1,16 @@
+id: report-number-utilization
+version: 1.0.0
+summary: Report assigned and available Teams Phone numbers by type and country, with current utilization and capacity warnings.
+category: read
+riskTier: 0
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+redactParams: []
+maxBlastRadius: 0
+timeoutSeconds: 120

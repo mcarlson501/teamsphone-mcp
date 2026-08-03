@@ -1,0 +1,17 @@
+id: trace-call-flow
+version: 1.0.0
+summary: Trace a Teams Phone number through its resource account, auto-attendant menus, call queues, agents, and terminal targets while flagging loops and broken references.
+category: read
+riskTier: 0
+telephonyModels: [callingPlans, operatorConnect, directRouting]
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+  idempotentHint: true
+inputs:
+  tenantId: { type: string, required: true }
+  credentialRef: { type: string, required: true }
+  dialedNumber: { type: string, required: true }
+redactParams: []
+maxBlastRadius: 0
+timeoutSeconds: 240
