@@ -304,6 +304,8 @@ Design intent: this is an **operational management toolset**, not just MACD exec
 
 Not in v1 (documented as such): porting execution, Direct Routing/SBC, carrier/range ordering, tenant first-enablement, license purchasing, live call control.
 
+**Phase G (tools 44–55) is an amendment to this catalog, added after the M5.5 coverage review. It is specified in §16 and scheduled as milestone M8; nothing in Phase G is required for v1.**
+
 ---
 
 ## 9. Audit, Logging & Review
@@ -364,7 +366,16 @@ Read-only, so lower risk than M5 but the highest adoption value: diagnose-user-v
 **M6 — Hardening + docs + container**
 Rate limiting, log scrubber test, Dockerfile with pinned module, docs complete, GitHub Actions CI (build, unit, Pester, lint, secret-scan), first tagged release. ✅ `docker compose up` + documented Entra setup → working server in under 15 minutes on a clean machine.
 
+**M6.5 — Adoption & trust surface**
+Two deliverables, both aimed at the single biggest adoption barrier (Entra app setup) and the single biggest differentiator (write safety). Neither changes the tool catalog. See §14 for scope.
+✅ A voice-generalist admin who has never registered an Entra app gets from clean machine to a successful `get-user-voice-config` call using only `init` + the README; ✅ the safety demo shows an execute attempt refused without a valid confirmation token.
+
 **M7 (post-v1)** — Phase E shared-object writes, Key Vault credential provider, OTel exporter, hash-chained audit option, ghcr/npm publishing, MCP catalog listings.
+
+**M8 (post-v1) — Phase G coverage expansion.** The tool catalog gaps identified by the post-M5.5 review, specified in §16. Split into two independently shippable parts: **M8a** (correctness fixes to existing tools — group policy assignment precedence and Shared Calling awareness) and **M8b** (new Phase G tools, prioritized in §16.3). M8a is a bug-fix milestone and may be pulled forward ahead of M7 if the dev tenant reproduces either gap.
+✅ M8a: a tenant with a group-assigned voice policy and a Shared Calling policy is reported correctly by `report-policy-assignments`, `diagnose-user-voice`, and `report-number-utilization`; ✅ M8b: each shipped Phase G tool meets §12 with Pester coverage and a dev-tenant integration happy path.
+
+**Security milestones S1–S4** run in parallel with the above and are specified in §15. S1 (supply chain & CI gates) and S2 (token binding & client identity) ship alongside M6; S3 (constrained tool execution) is a standalone milestone that gates accepting third-party tool contributions; S4 (untrusted data handling & data-at-rest) accompanies M7.
 
 ## 12. Definition of Done (every PR)
 - Manifest schema-valid; version bumped if behavior changed
@@ -379,3 +390,151 @@ Rate limiting, log scrubber test, Dockerfile with pinned module, docs complete, 
 3. Host: .NET is confirmed.
 4. Repository: public, with explicit experimental/nonproduction warnings.
 5. Session defaults: configurable 10-minute idle timeout and 10-session cap accepted initially; tune later using measured runspace memory and workload behavior.
+
+---
+
+## 14. Adoption & Trust Surface (M6.5)
+
+Assumed deployment model for v1: **self-hosted**. A hosted-by-the-maintainer instance would have to hold a certificate carrying Teams Communications Administrator in someone else's tenant, which is a security-review non-starter for most organizations and puts the customer's own audit evidence outside their boundary. Any hosted offering is therefore scoped to (a) `readonly`/`whatif` evaluation against a demo tenant, or (b) an existing consulting engagement — never general SaaS. A hosted control plane paired with a customer-side execution agent is the only credible general-purpose hosted shape and is explicitly out of scope for v1. Everything below optimizes the self-host path instead.
+
+### 14.1 Shrink Entra setup to one command
+
+`docs/setup-entra-app.md` is accurate but is a ~30-minute manual click-through, and it is the point where non-voice-specialist admins abandon the project. Ship a first-run bootstrap that collapses it.
+
+Scope:
+- A `teamsphone-mcp init` entrypoint (host subcommand, plus a `scripts/init.ps1` equivalent for admins who prefer running it in `pwsh`).
+- Generates the self-signed certificate locally with correct key usage and expiry, and **never** writes private key material into the repository or the audit root.
+- Emits the exact Entra app registration steps for the operator to perform, including the required Graph application permissions and the Teams admin role, rendered with the values just generated (thumbprint, subject) so nothing has to be transcribed by hand.
+- Optionally automates the registration where the operator can consent, but manual mode must remain fully supported — many admins cannot or will not grant an automation tool directory-write access.
+- Writes the `credentialRef` entry into local config for the operator, then runs a **connectivity self-test**: open a session, call `get-user-voice-config` (or an equivalent tier-0 probe), and report a clear pass/fail with a remediation hint per failure mode (consent missing, role not assigned, cert not uploaded, wrong tenant).
+- Defaults the new install to `TEAMSPHONE_MCP_MODE=whatif`, and says so in the output.
+
+Acceptance: a clean machine goes from nothing to a green self-test using `init` plus the README alone, with no other document open.
+
+### 14.2 Make the write-safety story visible
+
+The §6.4 protocol is the main reason to use this instead of hand-rolled PowerShell, but it currently only exists as prose. Prose does not earn trust from an admin deciding whether to point this at production.
+
+Scope:
+- A recorded terminal walkthrough (asciinema or equivalent, ~90 seconds) embedded in the README showing, in order: a write called without `dryRun:false` returning `dryRunCompleted` with a rendered plan; an execute attempt with a missing/stale/param-mismatched token being refused; the confirmed execute succeeding with verification; and the resulting audit record retrieved by `correlationId`.
+- A parallel `whatIfMode` clip showing `"simulated": true` and **no** confirmation token issued, proving the session-level ceiling.
+- The recording must be reproducible from a checked-in script against the dev tenant or a mocked execution factory, so it can be re-cut when the envelope changes rather than silently going stale.
+- README gains a short "Why not just write the PowerShell yourself?" section pointing at the recording and at §6.4.
+
+Acceptance: the refusal path — not just the happy path — is visible in the recording, and the script that produces it lives in the repo.
+
+---
+
+## 15. Security Hardening Roadmap
+
+§7 lists acceptance-blocking security requirements for the tool surface. This section covers hardening of the **host and supply chain** discovered during review, sequenced into milestones that interleave with §11. Each milestone is independently shippable; S1 and S2 do not depend on each other.
+
+Threat model assumption for all of the below: the MCP client is **semi-trusted** (authenticated, but its instructions may be influenced by an LLM reading tenant-controlled text), the tenant's data is **untrusted input**, and a merged community `run.ps1` is **untrusted code**. The current design defends the first two well and the third not at all.
+
+### S1 — Supply chain & CI gates (ship alongside M6)
+
+Cheap, mechanical, and mostly missing today. No runtime behavior changes.
+
+- `.github/dependabot.yml` covering `nuget` and `github-actions` (and `docker` once the Dockerfile lands). Required by §7 and currently absent; because actions are SHA-pinned, nothing updates them without this.
+- NuGet lock files (`packages.lock.json`) committed for every project, with `--locked-mode` on CI restore. Restore is presently non-reproducible.
+- `<NuGetAuditMode>all</NuGetAuditMode>` and `<NuGetAuditLevel>low</NuGetAuditLevel>` in `Directory.Build.props`. Audit defaults to direct packages only; with `TreatWarningsAsErrors` already enabled, transitive advisories then block the build.
+- CodeQL analysis for C#, with `security-events: write` scoped to that job alone.
+- **PSScriptAnalyzer over `tools/`** — the highest-value single addition, because ~40 `run.ps1` files are the real attack surface and none are linted. Include custom rules failing the build on `Invoke-Expression`, `iex`, `[ScriptBlock]::Create`, `Add-Type`, and `Start-Process`, which converts §7's "no generic execution tool" from policy into an enforced gate.
+- Log-scrubber CI job (§7): capture host output across a representative run and fail on certificate-thumbprint, base64-key, or PFX-marker patterns.
+- OpenSSF Scorecard workflow + README badge. Directly serves §14's trust problem — an admin evaluating self-hosting gets a supply-chain signal without reading code.
+
+✅ CI fails on a deliberately introduced vulnerable package, a `run.ps1` containing `Invoke-Expression`, and a secret echoed to the log.
+
+### S2 — Token binding & client identity (ship alongside M6)
+
+Closes two concrete gaps in the §6.4 protocol.
+
+- **Single-use confirmation tokens.** The token payload currently signs only `toolId + tenantId + paramsHash + expiry`, so it replays for the whole 15-minute TTL. Idempotency covers some tools but not all — `move-number-between-users` A→B followed by B→A both look legitimate. Add a random `jti` to the payload and a bounded consumed-token cache holding each `jti` until its expiry.
+- **Session and client binding.** Add `sessionId` and `clientId` to the signed payload and reject tokens presented outside their issuing session, so a token minted in a permissive session cannot be redeemed in one opened with a lower `maxRiskTier`.
+- **Named client tokens.** Replace the single static bearer token with a map of token → `clientId`, with at least two accepted simultaneously so rotation needs no downtime. `clientId` in audit records must be derived server-side from the matched token, never asserted by the client — otherwise §9 attribution is unfalsifiable.
+- Document HMAC signing-key lifecycle: never shared across instances unintentionally, rotation procedure, and the consequence of key compromise (forgeable confirmations).
+
+✅ A replayed token is rejected; a token redeemed in a different session is rejected; audit records attribute two different callers distinctly.
+
+### S3 — Constrained tool execution (own milestone; blocks accepting outside tool contributions)
+
+The most serious finding and the one that cannot be retrofitted cheaply. `PowerShellTenantSessionFactory` creates runspaces via `RunspaceFactory.CreateRunspace()` with no `InitialSessionState`, so every `run.ps1` executes in FullLanguage, in-process, with full .NET reflection. A malicious or merely careless contributed tool can read the confirmation-token signing key, reach other tenants' certificate private keys in process memory, open network connections, and write arbitrary files — none of which the §6.4 policy engine can observe, because it all happens inside the same process.
+
+This is not a theoretical concern for this project specifically: §3's core value proposition is that community Teams admins contribute tools without touching the host engine. **Until S3 lands, accepting third-party tool contributions means accepting arbitrary code execution on the host, and CONTRIBUTING.md should say so plainly.**
+
+- Build runspaces from an `InitialSessionState` with `LanguageMode = ConstrainedLanguage`.
+- Explicit command allowlist: the `MicrosoftTeams` module surface, `tools/common`, and a minimal core cmdlet set. Everything else absent rather than blocked.
+- No `Add-Type`, no arbitrary `New-Object`, restricted execution policy, no provider access outside what tools legitimately need.
+- Enforce `timeoutSeconds` with a hard `PowerShell.Stop()` plus runspace disposal rather than cooperative cancellation, so a wedged tool cannot hold the per-tenant write lock indefinitely.
+- Re-run the full Pester suite under the constrained state; any tool that breaks is a tool doing something it should not.
+
+✅ A test tool attempting `[System.IO.File]::ReadAllText(...)`, `Add-Type`, or an outbound socket fails at the runspace boundary rather than at review time; the §10 isolation test is extended to assert a tool cannot read another session's state.
+
+### S4 — Untrusted data handling & data-at-rest (post-v1, with M7)
+
+- **Tenant-data prompt injection.** Tool output carries tenant-controlled free text — display names, resource account names, auto attendant greetings, queue names — straight into the model's context. Anyone able to set a display name can plant instructions that `get-tenant-voice-snapshot` or `trace-call-flow` faithfully delivers to the LLM. The §6.4 two-step token flow is already the correct structural defense and means injection cannot produce a one-shot write; that argument belongs in `SECURITY.md` as an explicit, documented mitigation. Add defense in depth: strip control and ANSI sequences, length-cap tenant-derived strings, and mark them as untrusted data in the envelope shape rather than blending them with server-generated text.
+- **Snapshot and audit data at rest.** Snapshots hold UPNs and phone numbers under a 400-day default retention. `AuditPathResolver` already sanitizes path segments correctly; add restrictive permissions at creation (0700 directories, 0600 files on Unix), an optional snapshot encryption key, and a documented per-tenant purge path for customer offboarding.
+- SBOM (CycloneDX) generated and attached to tagged releases.
+- Container and module scanning (Trivy or Grype) over the M6 image, including the pinned `MicrosoftTeams` module, which is otherwise an unscanned dependency.
+- `SECURITY.md` expanded into a real threat model covering the three trust boundaries above, the stdio-is-locally-trusted assumption, and the hosting-model conclusion from §14.
+
+✅ A seeded injection string in a tenant display name appears in output as clearly delimited untrusted data and cannot yield an execution token; snapshot files are unreadable by other local users; release artifacts carry an SBOM.
+
+---
+
+## 16. Tool Coverage Amendment — Phase G (M8)
+
+**Status: candidate work, not committed scope.** Everything in this section is an *addition* to the §8 catalog identified by a coverage review run after M5.5 completed. The v1 catalog (tools 1–43) is unchanged and remains the shipping target; nothing here blocks M6, M6.5, or M7. This section exists so the work is captured, sized, and prioritized rather than rediscovered later — each item should become an issue before any of it becomes a PR.
+
+Method: every `Cs*` cmdlet invoked across `tools/**/run.ps1` was cross-referenced against the current [Teams PowerShell supported-versions and deprecated-cmdlet list](https://learn.microsoft.com/microsoftteams/teams-powershell-supported-versions), and the §8 catalog was compared against the documented Teams Phone admin surface (voice-app cmdlet reference, dynamic emergency calling, Shared Calling, user calling settings, group policy assignment).
+
+**Finding worth recording:** zero deprecated cmdlets are in use. The catalog is already on `Get-CsPhoneNumberAssignment` rather than `Get-CsOnlineTelephoneNumber`, on `Get-CsOnlineApplicationInstance` rather than `Get-CsOnlineApplicationEndpoint`, and on `Get-CsOnlineLisLocation`. No remediation needed; re-run this cross-reference whenever the pinned `MicrosoftTeams` module version moves (§7 dependency pinning), because a module bump is when this silently rots.
+
+### 16.1 Correctness gaps in existing tools (M8a)
+
+These are **defects in shipped tools**, not missing coverage, and should be treated as bug fixes with a higher priority than anything in §16.2. Both cause an existing tool to return a confidently wrong answer to a generalist admin — the exact failure mode §8's design intent is written to prevent.
+
+**G-1. Group-based policy assignment is invisible.**
+`report-policy-assignments`, `diagnose-user-voice`, and `update-user-calling-policies` derive policy state from `Get-CsOnlineUser`. Tenants that assign voice policies to groups via `New-CsGroupPolicyAssignment` have a precedence chain (direct assignment → group assignment by rank → global default). Without reading `Get-CsUserPolicyAssignment` / `Get-CsGroupPolicyAssignment`, the policy matrix and the diagnostic chain may report the wrong *effective* policy, and `update-user-calling-policies` will create a direct assignment that silently overrides a group assignment the admin did not know existed.
+
+Work: add effective-policy resolution to `tools/common`; consume it in the three tools above; add a preflight check to `update-user-calling-policies` and `onboard-voice-user` that surfaces "this user currently inherits X from group Y — a direct assignment will override it."
+
+**G-2. Shared Calling is unmodeled.**
+[Shared Calling](https://learn.microsoft.com/microsoftteams/shared-calling-plan) (`Get-CsTeamsSharedCallingRoutingPolicy`) provides outbound PSTN service to many users from a single resource-account number. In a tenant using it, `report-number-utilization` overstates required numbers and its exhaustion forecast is wrong, and `trace-call-flow` cannot explain why a user with no assigned number can dial out.
+
+Work: teach `report-number-utilization` to exclude Shared Calling users from per-user number demand; teach `diagnose-user-voice` and `trace-call-flow` to recognize and report the policy; ship the read tool G-5 below alongside.
+
+✅ M8a acceptance: a dev tenant seeded with one group-assigned voice routing policy and one Shared Calling policy is reported correctly by all five affected tools, with a Pester fixture per gap so neither regresses.
+
+### 16.2 Candidate new tools — Phase G
+
+Numbering continues §8. All are tier 0 unless noted. Each still owes a manifest, `run.ps1`, and Pester suite per §12; none are exempt from §6.
+
+44. **`get-user-calling-settings`** (tier 0) — `Get-CsUserCallingSettings` + `Get-CsUserCallingDelegate`: call forwarding, simultaneous ring, unanswered routing, call groups, delegates. Nothing in the current catalog can see any of this, yet "my calls go somewhere unexpected" and "the manager's calls don't ring the assistant" are high-frequency tickets. `diagnose-user-voice` should chain into it — a user with immediate forwarding to a dead target passes every check that tool performs today.
+45. **`list-emergency-network-config`** (tier 0) — `Get-CsTenantNetworkSite`/`Subnet`/`Region`, `Get-CsOnlineLisSubnet`/`LisWirelessAccessPoint`/`LisSwitch`/`LisPort`, `Get-CsTeamsEmergencyCallingPolicy`, `Get-CsTeamsEmergencyCallRoutingPolicy`. `report-emergency-coverage` currently sees only static per-number locations; [dynamic emergency calling](https://learn.microsoft.com/microsoftteams/configure-dynamic-emergency-calling) — the part carrying US regulatory weight under Kari's Law and RAY BAUM'S Act — is entirely invisible. For a project positioning auditability as a headline feature (§9), this is the most defensible single gap to close, and it should feed findings into `report-emergency-coverage` and `run-tenant-health-check`.
+46. **`get-resource-account-health`** (tier 0) — `Get-CsOnlineApplicationInstanceAssociationStatus` + `Get-CsAutoAttendantStatus`. These expose asynchronous server-side provisioning state. Without them, a queued or failed association can make a `verify` stage pass against stale reads and make diagnostics describe a configuration that is not yet live.
+47. **`get-voice-app-authorization`** (tier 0) — `Get-CsTeamsVoiceApplicationsPolicy` plus [authorized users](https://learn.microsoft.com/microsoftteams/aa-cq-setup-authorized-users) on call queues and auto attendants. Answers "why can't the supervisor change the holiday greeting," which is currently undiagnosable with any tool in the catalog.
+48. **`compare-tenant-snapshots`** (tier 0) — diff two `get-tenant-voice-snapshot` outputs, or two audit snapshot refs by ID. Mostly a rendering layer over data §9.1 already stores. High value because `report-change-history` only covers changes *this server* made; drift introduced in the Teams admin center by someone else is exactly the class of change that breaks things and is currently unreportable.
+49. **`list-audio-files`** (tier 0) — `Get-CsOnlineAudioFile` mapped to the auto attendants and call queues referencing each file; flags TTS-vs-file usage and unreferenced or missing audio. Complements `find-orphaned-objects`.
+50. **`get-number-orders`** (tier 0) — `Get-CsOnlineTelephoneNumberOrder`. `report-number-utilization` forecasts exhaustion without visibility into in-flight supply, making its forecast structurally pessimistic. Note this is *reading* order state only; §8's "no porting execution" non-goal is unchanged.
+51. **`list-common-area-phones`** (tier 0) — common-area-licensed accounts, `Get-CsTeamsIPPhonePolicy`, hotline/PLAR configuration. CAPs are routinely missed in number-utilization and offboarding audits because they are not users.
+52. **`list-audio-conferencing`** (tier 0) — `Get-CsOnlineDialInConferencingUser`, `Get-CsTeamsAudioConferencingPolicy`, service numbers. Adjacent to Teams Phone rather than core to it; include only if the dial-in surface proves to generate real tickets.
+53. **Call park / hold / group pickup coverage** — `Get-CsTeamsCallParkPolicy`, `Get-CsTeamsCallHoldPolicy`, group call pickup settings. Low enough individual value that this should extend `list-voice-policies` rather than become its own tool.
+54. **`update-user-calling-settings`** (tier 2, write) — the write half of tool 44. Rollback is clean because `Set-CsUserCallingSettings` requires writing a whole settings group, so the snapshot stage naturally captures a complete restore payload. Blocked on 44.
+55. **Resource account lifecycle writes** (tier 2–3) — `New-CsOnlineApplicationInstance`, `New-CsOnlineApplicationInstanceAssociation`, `Set-CsOnlineApplicationInstance`. The catalog has zero resource-account writes, yet resource accounts are the plumbing beneath every auto attendant and call queue. **This is effectively a prerequisite for Phase E (M7)**: `create-callqueue-from-template` and `create-autoattendant-from-template` cannot produce a reachable object without it.
+
+### 16.3 Suggested sequencing
+
+| Order | Item | Rationale |
+|---|---|---|
+| 1 | G-1, G-2 (§16.1) | Existing tools currently return wrong answers |
+| 2 | 44 `get-user-calling-settings` | Largest read-side blind spot; highest ticket volume |
+| 3 | 45 `list-emergency-network-config` | Compliance-critical; strongest trust/differentiation argument |
+| 4 | 55 resource account writes | Unblocks Phase E / M7 |
+| 5 | 46, 47, 48 | Diagnostic depth and drift detection |
+| 6 | 49, 50, 51, 53 | Inventory completeness |
+| 7 | 52, 54 | Evaluate against real demand before building |
+
+### 16.4 Explicitly still not in v1
+
+Unchanged from §8, plus one addition worth recording: **Teams Phone Agent / Mainline Attendant** (`Get-CsMainlineAttendant*`, `New-CsMainlineAttendant*FlowBooking`/`QuestionAnswer` flows) is preview-limited today and correctly out of scope, but it is the direction auto attendants are heading. Revisit when it reaches general availability.

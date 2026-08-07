@@ -61,7 +61,7 @@ public class ConfirmationTokenServiceTests
     [Theory]
     [InlineData("invalid")]
     [InlineData("invalid.token.extra")]
-    [InlineData("%%%.%%%")] 
+    [InlineData("%%%.%%%")]
     public void Validate_RejectsMalformedToken(string token)
     {
         var service = CreateService();

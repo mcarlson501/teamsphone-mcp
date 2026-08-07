@@ -1,8 +1,12 @@
+using System.Globalization;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using TeamsPhoneMcp.Audit;
 using TeamsPhoneMcp.Core;
 using TeamsPhoneMcp.Host.Auth;
 using TeamsPhoneMcp.Host.Logging;
+using TeamsPhoneMcp.Host.RateLimiting;
 
 namespace TeamsPhoneMcp.Host;
 
@@ -69,6 +73,46 @@ public class Program
                     options.BearerToken = envToken;
                 }
             });
+        builder.Services
+            .AddOptions<McpRateLimitOptions>()
+            .Bind(builder.Configuration.GetSection(McpRateLimitOptions.SectionName))
+            .Validate(
+                options => options.PermitLimit > 0,
+                $"{McpRateLimitOptions.SectionName}:PermitLimit must be greater than zero.")
+            .Validate(
+                options => options.Window > TimeSpan.Zero,
+                $"{McpRateLimitOptions.SectionName}:Window must be greater than zero.")
+            .ValidateOnStart();
+        builder.Services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.OnRejected = static (context, _) =>
+            {
+                if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+                {
+                    context.HttpContext.Response.Headers.RetryAfter =
+                        Math.Max(1, (long)Math.Ceiling(retryAfter.TotalSeconds))
+                            .ToString(CultureInfo.InvariantCulture);
+                }
+
+                return ValueTask.CompletedTask;
+            };
+            options.AddPolicy(McpRateLimitPolicy.Name, context =>
+            {
+                var settings = context.RequestServices
+                    .GetRequiredService<IOptions<McpRateLimitOptions>>()
+                    .Value;
+                return RateLimitPartition.GetFixedWindowLimiter(
+                    McpRateLimitPolicy.GetPartitionKey(context),
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        AutoReplenishment = true,
+                        PermitLimit = settings.PermitLimit,
+                        QueueLimit = 0,
+                        Window = settings.Window
+                    });
+            });
+        });
 
         builder.Services
             .AddMcpServer()
@@ -84,8 +128,9 @@ public class Program
 
         app.UseMiddleware<CorrelationLoggingMiddleware>();
         app.UseMiddleware<BearerAuthMiddleware>();
+        app.UseRateLimiter();
 
-        app.MapMcp("/mcp");
+        app.MapMcp("/mcp").RequireRateLimiting(McpRateLimitPolicy.Name);
 
         await app.RunAsync();
     }

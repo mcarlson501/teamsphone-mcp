@@ -22,18 +22,118 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
 
       - name: Restore
         run: dotnet restore TeamsPhoneMcp.sln
 
+      - name: Verify formatting
+        run: dotnet format TeamsPhoneMcp.sln --verify-no-changes --no-restore
+
       - name: Build
         run: dotnet build TeamsPhoneMcp.sln --configuration Release --no-restore
 
       - name: Test
         run: dotnet test TeamsPhoneMcp.sln --configuration Release --no-build
+
+  powershell-tests:
+    name: PowerShell tool tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Pester
+        shell: pwsh
+        run: Install-Module Pester -RequiredVersion 6.0.0 -Scope CurrentUser -Force -SkipPublisherCheck
+
+      - name: Test PowerShell tools
+        shell: pwsh
+        run: Invoke-Pester -Path tools -CI -Output Detailed
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Scan repository history
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: false
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+          GITLEAKS_VERSION: 8.30.1
+
+  container-build:
+    name: Container build and smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build image
+        run: docker build --tag teamsphone-mcp:ci .
+
+      - name: Verify packaged runtime
+        shell: bash
+        run: |
+          docker run --rm --entrypoint pwsh teamsphone-mcp:ci \
+            -NoLogo -NoProfile -Command '
+              $module = Import-Module MicrosoftTeams -RequiredVersion 7.8.0 -PassThru -ErrorAction Stop |
+                Where-Object Name -eq MicrosoftTeams | Select-Object -First 1
+              if ($null -eq $module -or $module.Version -ne [version]"7.8.0") {
+                throw "MicrosoftTeams 7.8.0 was not imported."
+              }
+            '
+          docker run --rm --entrypoint /bin/sh teamsphone-mcp:ci -c '
+            test "$(id -un)" = app
+            test "$(find /app/tools -name manifest.yaml | wc -l)" -eq 38
+            test -w /data/audit
+          '
+
+      - name: Smoke test HTTP transport
+        shell: bash
+        run: |
+          smoke_token="$(openssl rand -hex 32)"
+          container_id="$(docker run --detach --publish 127.0.0.1:58199:8080 \
+            --env "TEAMSPHONE_MCP_BEARER_TOKEN=${smoke_token}" \
+            --env TEAMSPHONE_MCP_MODE=whatif \
+            teamsphone-mcp:ci)"
+          trap 'docker logs "${container_id}"; docker rm --force "${container_id}" >/dev/null' EXIT
+
+          for attempt in {1..30}; do
+            health="$(docker inspect --format '{{.State.Health.Status}}' "${container_id}")"
+            if [[ "${health}" == healthy ]]; then
+              break
+            fi
+            if [[ "${health}" == unhealthy ]]; then
+              exit 1
+            fi
+            sleep 1
+          done
+          test "$(docker inspect --format '{{.State.Health.Status}}' "${container_id}")" = healthy
+
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            --request POST http://127.0.0.1:58199/mcp)" = 401
+          test "$(curl --silent --output response.json --write-out '%{http_code}' \
+            --request POST http://127.0.0.1:58199/mcp \
+            --header "Authorization: Bearer ${smoke_token}" \
+            --header 'Content-Type: application/json' \
+            --header 'Accept: application/json, text/event-stream' \
+            --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"container-smoke","version":"1.0"}}}')" = 200
+          grep --quiet '"serverInfo"' response.json
