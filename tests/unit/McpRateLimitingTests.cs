@@ -1,7 +1,10 @@
 using System.Net;
 using System.Net.Http.Headers;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Primitives;
 using TeamsPhoneMcp.Host;
+using TeamsPhoneMcp.Host.RateLimiting;
 
 namespace TeamsPhoneMcp.UnitTests;
 
@@ -65,12 +68,69 @@ public class McpRateLimitingTests : IClassFixture<WebApplicationFactory<Program>
         Assert.NotEqual(HttpStatusCode.TooManyRequests, authenticatedResponse.StatusCode);
     }
 
+    [Fact]
+    public void GetPartitionKey_UsesFirstAndOnlyValidSessionHeader()
+    {
+        var context = CreateHttpContext();
+        context.Request.Headers["Mcp-Session-Id"] = "session_A-123.~";
+
+        var partitionKey = McpRateLimitPolicy.GetPartitionKey(context);
+
+        Assert.Equal("session:session_A-123.~", partitionKey);
+    }
+
+    [Fact]
+    public void GetPartitionKey_WithMultipleSessionHeaders_UsesClientFallback()
+    {
+        var context = CreateHttpContext();
+        context.Request.Headers["Mcp-Session-Id"] =
+            new StringValues(["session-a", "session-b"]);
+
+        var partitionKey = McpRateLimitPolicy.GetPartitionKey(context);
+
+        Assert.Equal("client:192.0.2.10", partitionKey);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("session with spaces")]
+    [InlineData("session/with/separators")]
+    [InlineData("séssion")]
+    public void GetPartitionKey_WithInvalidSessionHeader_UsesClientFallback(string sessionId)
+    {
+        var context = CreateHttpContext();
+        context.Request.Headers["Mcp-Session-Id"] = sessionId;
+
+        var partitionKey = McpRateLimitPolicy.GetPartitionKey(context);
+
+        Assert.Equal("client:192.0.2.10", partitionKey);
+    }
+
+    [Fact]
+    public void GetPartitionKey_WithOversizedSessionHeader_UsesClientFallback()
+    {
+        var context = CreateHttpContext();
+        context.Request.Headers["Mcp-Session-Id"] =
+            new string('a', McpRateLimitPolicy.MaxSessionIdLength + 1);
+
+        var partitionKey = McpRateLimitPolicy.GetPartitionKey(context);
+
+        Assert.Equal("client:192.0.2.10", partitionKey);
+    }
+
     private HttpClient CreateAuthorizedClient()
     {
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", ValidToken);
         return client;
+    }
+
+    private static DefaultHttpContext CreateHttpContext()
+    {
+        var context = new DefaultHttpContext();
+        context.Connection.RemoteIpAddress = IPAddress.Parse("192.0.2.10");
+        return context;
     }
 
     private static async Task<HttpResponseMessage> SendMcpRequestAsync(
