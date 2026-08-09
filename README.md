@@ -298,7 +298,8 @@ move the caller across, then remove the old one. The `clientId` written to the a
 trail is always the one the server matched, never a value the client asserts, so
 attribution cannot be forged. Startup fails if two clients share a token, because the
 audit trail could not then tell them apart. A session belongs to the client that opened
-it: presenting another client's `Mcp-Session-Id` is rejected with `401`.
+it: presenting another client's `Mcp-Session-Id` is rejected with `401`, as is a request
+that repeats the header, since the session it names would then be ambiguous.
 
 ## Project status and roadmap
 

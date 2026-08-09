@@ -33,10 +33,17 @@ public sealed class ConsumedConfirmationTokenCache
     public int Count => _consumed.Count;
 
     /// <summary>
-    /// Atomically records <paramref name="jti"/> as redeemed. Returns <c>false</c> when the
-    /// identifier was already consumed, or when the cache is full and cannot record the
-    /// redemption — in both cases the caller must reject the token, because a redemption
-    /// this class cannot remember is a redemption it cannot prevent from being replayed.
+    /// Records <paramref name="jti"/> as redeemed and reports whether this caller won the
+    /// redemption. The add itself is atomic, so exactly one concurrent caller can ever receive
+    /// <see cref="ConsumedTokenResult.Consumed"/> for a given identifier.
+    /// <para>
+    /// <see cref="ConsumedTokenResult.AlreadyConsumed"/> means the token was spent earlier, and
+    /// <see cref="ConsumedTokenResult.CacheFull"/> means capacity was reached and the redemption
+    /// could not be recorded. The caller must reject the token in both cases, because a
+    /// redemption this class cannot remember is one it cannot prevent from being replayed. The
+    /// capacity check is a separate read, so concurrent callers may overshoot the cap slightly;
+    /// that is bounded by the number of threads in flight and never weakens replay detection.
+    /// </para>
     /// </summary>
     public ConsumedTokenResult TryConsume(string jti, long expiresAtUnixSeconds, DateTimeOffset nowUtc)
     {

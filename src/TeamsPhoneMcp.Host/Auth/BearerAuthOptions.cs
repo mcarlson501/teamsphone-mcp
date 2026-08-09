@@ -31,22 +31,25 @@ public sealed class BearerAuthOptions
 
     /// <summary>
     /// Flattens both forms into the <c>clientId -&gt; token</c> set the middleware enforces.
-    /// When nothing is configured the result is empty and the server fails closed.
+    /// Values are trimmed to match how the <c>Bearer</c> header is parsed, and whitespace-only
+    /// values are treated as unset — otherwise a stray space would leave the host looking
+    /// configured while rejecting every request. When nothing is configured the result is empty
+    /// and the server fails closed.
     /// </summary>
     public IReadOnlyList<KeyValuePair<string, string>> ResolveClientTokens()
     {
         var resolved = new List<KeyValuePair<string, string>>();
 
-        if (!string.IsNullOrEmpty(BearerToken))
+        if (!string.IsNullOrWhiteSpace(BearerToken))
         {
-            resolved.Add(new KeyValuePair<string, string>(DefaultClientId, BearerToken));
+            resolved.Add(new KeyValuePair<string, string>(DefaultClientId, BearerToken.Trim()));
         }
 
         foreach (var (clientId, token) in ClientTokens)
         {
-            if (!string.IsNullOrEmpty(token))
+            if (!string.IsNullOrWhiteSpace(token))
             {
-                resolved.Add(new KeyValuePair<string, string>(clientId, token));
+                resolved.Add(new KeyValuePair<string, string>(clientId, token.Trim()));
             }
         }
 

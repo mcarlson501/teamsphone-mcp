@@ -10,6 +10,7 @@ using TeamsPhoneMcp.Audit;
 using TeamsPhoneMcp.Core.Execution;
 using TeamsPhoneMcp.Core.Sessions;
 using TeamsPhoneMcp.Host;
+using TeamsPhoneMcp.Host.Auth;
 
 namespace TeamsPhoneMcp.UnitTests;
 
@@ -81,18 +82,17 @@ public sealed class TokenBindingAcceptanceTests
         Assert.Equal("beta", sink.Records[1].ClientId);
     }
 
-    [Fact]
-    public async Task BothClientTokensAreAcceptedAtOnceSoRotationNeedsNoDowntime()
+    [Theory]
+    [InlineData(AlphaToken)]
+    [InlineData(BetaToken)]
+    public async Task EitherClientTokenIsAcceptedSoRotationNeedsNoDowntime(string token)
     {
         await using var factory = CreateFactory(out _);
+        using var client = CreateClient(factory, token);
 
-        foreach (var token in new[] { AlphaToken, BetaToken })
-        {
-            using var client = CreateClient(factory, token);
-            var response = await PostAsync(client, InitializePayload());
+        using var response = await PostAsync(client, InitializePayload());
 
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        }
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     [Fact]
@@ -103,9 +103,64 @@ public sealed class TokenBindingAcceptanceTests
         var alphaSession = await InitializeSessionAsync(alpha);
 
         using var beta = CreateClient(factory, BetaToken);
-        var response = await PostAsync(beta, ToolsListPayload(), alphaSession);
+        using var response = await PostAsync(beta, ToolsListPayload(), alphaSession);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    /// <summary>
+    /// A repeated session header would join into one value that no other component resolves,
+    /// leaving the real session unowned, so it is refused outright.
+    /// </summary>
+    [Fact]
+    public async Task ARepeatedSessionHeaderIsRejectedRatherThanTreatedAsAbsent()
+    {
+        await using var factory = CreateFactory(out _);
+        using var alpha = CreateClient(factory, AlphaToken);
+        var alphaSession = await InitializeSessionAsync(alpha);
+
+        using var beta = CreateClient(factory, BetaToken);
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/mcp")
+        {
+            Content = JsonContent.Create(ToolsListPayload()),
+        };
+        request.Headers.Add("Mcp-Session-Id", new[] { alphaSession, "another-session" });
+        request.Headers.Add("MCP-Protocol-Version", ProtocolVersion);
+
+        using var response = await beta.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    /// <summary>
+    /// The header parser trims, so a whitespace-only configured token could never match any
+    /// request. Resolving it away makes the host report itself unconfigured and fail closed
+    /// loudly, instead of looking configured while rejecting everything.
+    /// </summary>
+    [Theory]
+    [InlineData("   ")]
+    [InlineData("\t")]
+    [InlineData("")]
+    public void AWhitespaceOnlyTokenIsResolvedAwayRatherThanLookingConfigured(string token)
+    {
+        var options = new BearerAuthOptions { BearerToken = token };
+        options.ClientTokens["padded-out"] = token;
+
+        Assert.Empty(options.ResolveClientTokens());
+    }
+
+    [Fact]
+    public async Task SurroundingWhitespaceOnAConfiguredTokenIsIgnored()
+    {
+        await using var factory = CreateFactory(
+            out _,
+            builder => builder.UseSetting("Auth:ClientTokens:padded", $"  {AlphaToken}  "),
+            configureNamedTokens: false);
+        using var client = CreateClient(factory, AlphaToken);
+
+        using var response = await PostAsync(client, InitializePayload());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     [Fact]
@@ -145,14 +200,14 @@ public sealed class TokenBindingAcceptanceTests
         Assert.Contains("share the same", failure.Message, StringComparison.Ordinal);
     }
 
-    private static HttpClient CreateClient(WebApplicationFactory<Program> factory, string token)
+    private static HttpClient CreateClient(TestServerHost host, string token)
     {
-        var client = factory.CreateClient();
+        var client = host.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;
     }
 
-    private static WebApplicationFactory<Program> CreateFactory(
+    private static TestServerHost CreateFactory(
         out RecordingAuditSink sink,
         Action<IWebHostBuilder>? configure = null,
         bool configureNamedTokens = true)
@@ -160,7 +215,8 @@ public sealed class TokenBindingAcceptanceTests
         var recordingSink = new RecordingAuditSink();
         sink = recordingSink;
 
-        return new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        var seed = new WebApplicationFactory<Program>();
+        var configured = seed.WithWebHostBuilder(builder =>
         {
             if (configureNamedTokens)
             {
@@ -179,6 +235,25 @@ public sealed class TokenBindingAcceptanceTests
                 services.AddSingleton<IAuditSink>(recordingSink);
             });
         });
+
+        return new TestServerHost(seed, configured);
+    }
+
+    /// <summary>
+    /// Owns both factories: <c>WithWebHostBuilder</c> returns a second instance and does not
+    /// dispose the one it was called on.
+    /// </summary>
+    private sealed class TestServerHost(
+        WebApplicationFactory<Program> seed,
+        WebApplicationFactory<Program> configured) : IAsyncDisposable
+    {
+        public HttpClient CreateClient() => configured.CreateClient();
+
+        public async ValueTask DisposeAsync()
+        {
+            await configured.DisposeAsync();
+            await seed.DisposeAsync();
+        }
     }
 
     private static async Task<JsonElement> CallMockWriteAsync(
@@ -255,12 +330,12 @@ public sealed class TokenBindingAcceptanceTests
         @params = new { },
     };
 
-    private static Task<HttpResponseMessage> PostAsync(
+    private static async Task<HttpResponseMessage> PostAsync(
         HttpClient client,
         object payload,
         string? sessionId = null)
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, "/mcp")
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/mcp")
         {
             Content = JsonContent.Create(payload),
         };
@@ -272,7 +347,7 @@ public sealed class TokenBindingAcceptanceTests
             request.Headers.Add("MCP-Protocol-Version", ProtocolVersion);
         }
 
-        return client.SendAsync(request);
+        return await client.SendAsync(request);
     }
 
     private static async Task<JsonElement> ReadJsonRpcPayloadAsync(HttpResponseMessage response)

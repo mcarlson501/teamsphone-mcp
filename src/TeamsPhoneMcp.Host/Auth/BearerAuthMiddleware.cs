@@ -20,8 +20,6 @@ public sealed class BearerAuthMiddleware
     // Reject tokens longer than this to prevent memory/CPU DoS via oversized headers.
     internal const int MaxTokenLength = 2048;
 
-    internal const string SessionHeaderName = "Mcp-Session-Id";
-
     private readonly RequestDelegate _next;
     private readonly ILogger<BearerAuthMiddleware> _logger;
     private readonly PathString _protectedPath;
@@ -111,13 +109,17 @@ public sealed class BearerAuthMiddleware
     /// <summary>
     /// Claims the MCP session for the authenticated client. The session header is absent on
     /// <c>initialize</c> (the id is issued in that response), so an unclaimed request is allowed
-    /// through and claimed on the next call that carries the header.
+    /// through and claimed on the next call that carries the header. An ambiguous header is
+    /// refused rather than ignored: reading it loosely would claim a session id that no other
+    /// component resolves, leaving the real one unowned.
     /// </summary>
-    private bool TryClaimSession(HttpContext context, string clientId)
-    {
-        var sessionId = context.Request.Headers[SessionHeaderName].ToString();
-        return string.IsNullOrEmpty(sessionId) || _sessionOwnership.TryClaim(sessionId, clientId);
-    }
+    private bool TryClaimSession(HttpContext context, string clientId) =>
+        McpSessionHeader.Read(context, out var sessionId) switch
+        {
+            McpSessionHeaderState.Absent => true,
+            McpSessionHeaderState.Valid => _sessionOwnership.TryClaim(sessionId, clientId),
+            _ => false,
+        };
 
     private static bool TryGetBearerToken(HttpContext context, out byte[] token)
     {
