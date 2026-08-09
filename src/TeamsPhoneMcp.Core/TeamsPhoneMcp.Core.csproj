@@ -10,6 +10,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Microsoft.PowerShell.SDK 7.4.6 pulls a vulnerable 8.0.2; hold the patched 8.0.x. -->
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="8.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\TeamsPhoneMcp.Audit\TeamsPhoneMcp.Audit.csproj" />
     <ProjectReference Include="..\TeamsPhoneMcp.Credentials\TeamsPhoneMcp.Credentials.csproj" />
   </ItemGroup>

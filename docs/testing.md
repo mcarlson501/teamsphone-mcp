@@ -93,6 +93,28 @@ No tenant required — the Teams cmdlets are stubbed inside `BeforeAll`.
 CI runs the same suite with Pester 6.0.0 and `-CI`, so any failed tool test fails the
 workflow.
 
+## PowerShell lint gate
+
+Every `run.ps1` is analyzed with PSScriptAnalyzer 1.25.0 plus the custom rules in
+[`scripts/analyzer/TeamsPhoneMcp.AnalyzerRules.psm1`](../scripts/analyzer/TeamsPhoneMcp.AnalyzerRules.psm1).
+The custom rule `Measure-TeamsPhoneUnsafeExecution` reports an **Error** for
+`Invoke-Expression` (and `iex`), `Add-Type`, `Start-Process` (and `saps`/`start`), and
+`[ScriptBlock]::Create`, which turns the build spec's "no generic execution tool"
+policy into an enforced gate. Command names are reduced to their unqualified form
+first, so `Microsoft.PowerShell.Management\Start-Process` is caught exactly like the
+bare name.
+
+```bash
+# Error-severity findings fail; warnings and information are printed for review.
+pwsh -NoProfile -File scripts/lint-tools.ps1
+
+# The rules have their own suite, so a broken rule cannot silently stop gating.
+pwsh -NoProfile -c "Invoke-Pester -Path scripts/analyzer -Output Detailed"
+```
+
+There is no approved use of the banned constructs in this repository. If a tool appears
+to need one, the capability belongs in the host, not in a tool script.
+
 ## Secret scanning
 
 CI scans the complete Git history with Gitleaks 8.30.1. To reproduce the gate locally:
@@ -105,6 +127,43 @@ Known synthetic fixtures are narrowly scoped in [`.gitleaks.toml`](../.gitleaks.
 by detector, path, and fixture marker. Do not add path-wide exclusions or baselines for
 new findings; investigate them and rotate any real credential before changing the scan
 configuration.
+
+## Log scrubber gate
+
+Secret scanning covers the repository; the log scrubber covers the **running host**.
+[`scripts/log-scrubber-check.sh`](../scripts/log-scrubber-check.sh) seeds two credentials
+with known certificate material, drives a representative run over the HTTP transport
+(unauthenticated reject, `initialize`, `tools/list`, a `ping` call, both credential-
+resolution failure paths, and a malformed call), captures every byte the host writes to
+stdout and stderr, and fails if a seeded secret, PEM private key, base64 key blob, bare
+40-character thumbprint, or JWT reaches the log.
+
+```bash
+./scripts/log-scrubber-check.sh
+```
+
+The script asserts that the expected log markers appeared before it scans, and self-tests
+its own detection patterns against a canary file, so neither an unrepresentative run nor a
+broken pattern can produce a silent pass.
+
+## Dependency gates
+
+`Directory.Build.props` sets `NuGetAuditMode=all` and `NuGetAuditLevel=low`. Combined with
+`TreatWarningsAsErrors`, any advisory against a direct **or transitive** package fails the
+build. `packages.lock.json` is committed for every project and CI restores with
+`--locked-mode`, so restore is reproducible and a changed dependency graph is a visible
+diff rather than a silent drift.
+
+```bash
+# After changing a PackageReference, refresh the lock files and commit them.
+dotnet restore TeamsPhoneMcp.sln
+
+# Reproduce the CI gate.
+dotnet restore TeamsPhoneMcp.sln --locked-mode
+```
+
+When the audit flags a transitive package, pin the patched version with an explicit
+`PackageReference` in the project that pulls it in, and note why in a comment.
 
 ---
 

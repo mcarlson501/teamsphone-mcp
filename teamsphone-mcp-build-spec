@@ -445,6 +445,12 @@ Cheap, mechanical, and mostly missing today. No runtime behavior changes.
 
 ✅ CI fails on a deliberately introduced vulnerable package, a `run.ps1` containing `Invoke-Expression`, and a secret echoed to the log.
 
+**Delivered.** All seven items shipped. Notes for later milestones:
+- Enabling `NuGetAuditMode=all` immediately surfaced three real transitive advisories (`System.Security.Cryptography.Xml` 8.0.2 via `Microsoft.PowerShell.SDK`, and `System.Net.Http`/`System.Text.RegularExpressions` 4.3.0 via the test tooling). Each is pinned to a patched version with an explicit `PackageReference` and a comment. Expect the same on any SDK bump.
+- The PSScriptAnalyzer gate fails on **Error** severity only. The default rules produce ~800 warnings over `tools/` (mostly `PSAvoidGlobalVars` and `PSReviewUnusedParameter` from the Pester stubs) and none of them are Errors, so the custom `Measure-TeamsPhoneUnsafeExecution` rule is what actually gates. It has its own Pester suite, and `scripts/lint-tools.ps1` fails if the custom rule module fails to load, because a silent no-op gate is worse than no gate.
+- The rule matches on the **unqualified** command name. `CommandAst.GetCommandName()` returns the text as written, so `Microsoft.PowerShell.Management\Start-Process` resolves to the same command but would not have matched a bare-name lookup. Any future name-based gate must normalize the same way.
+- The log scrubber (`scripts/log-scrubber-check.sh`) drives a real host over HTTP with seeded certificate material, asserts the run reached the credential-failure paths before scanning, and self-tests its own detection patterns against a canary. Both guards exist so the job cannot degrade into a silent pass.
+
 ### S2 — Token binding & client identity (ship alongside M6)
 
 Closes two concrete gaps in the §6.4 protocol.
