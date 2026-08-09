@@ -154,7 +154,7 @@ public class ConfirmationTokenServiceTests
         var service = CreateService();
         var parameters = ParseJson("""{"targetUserUpn":"user@example.com"}""");
         var token = service.Issue("test-tool", "tenant-a", parameters, Caller, Now);
-        var tamperedToken = $"{token[..^1]}{(token[^1] == 'A' ? 'B' : 'A')}";
+        var tamperedToken = TamperWithSignature(token);
 
         var validation = service.Validate(
             tamperedToken,
@@ -322,6 +322,28 @@ public class ConfirmationTokenServiceTests
 
         Assert.False(validation.IsValid);
         Assert.Equal("sessionBoundConfirmationToken", validation.ErrorCode);
+    }
+
+    /// <summary>
+    /// Alters the first signature character, whose bits are all significant. The final
+    /// character of a 43-character base64url signature carries two unused bits, so changing
+    /// it can decode to the identical 32 bytes and tamper with nothing at all.
+    /// </summary>
+    private static string TamperWithSignature(string token)
+    {
+        var parts = token.Split('.', 2);
+        var signature = parts[1];
+        var tampered = $"{(signature[0] == 'A' ? 'B' : 'A')}{signature[1..]}";
+
+        Assert.NotEqual(Base64UrlDecode(signature), Base64UrlDecode(tampered));
+        return $"{parts[0]}.{tampered}";
+    }
+
+    private static byte[] Base64UrlDecode(string value)
+    {
+        var padded = value.Replace('-', '+').Replace('_', '/');
+        padded = padded.PadRight(padded.Length + (4 - padded.Length % 4) % 4, '=');
+        return Convert.FromBase64String(padded);
     }
 
     private static ConfirmationTokenService CreateService() =>
