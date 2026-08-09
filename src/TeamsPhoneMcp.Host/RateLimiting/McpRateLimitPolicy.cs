@@ -1,46 +1,17 @@
-using Microsoft.Extensions.Primitives;
-
 namespace TeamsPhoneMcp.Host.RateLimiting;
 
 internal static class McpRateLimitPolicy
 {
     public const string Name = "mcp-session";
-    internal const int MaxSessionIdLength = 128;
-    private const string SessionHeaderName = "Mcp-Session-Id";
+
+    internal const int MaxSessionIdLength = McpSessionHeader.MaxLength;
 
     public static string GetPartitionKey(HttpContext context)
     {
-        StringValues sessionHeader = context.Request.Headers[SessionHeaderName];
-        if (sessionHeader.Count == 1 && IsValidSessionId(sessionHeader[0]))
-        {
-            return $"session:{sessionHeader[0]}";
-        }
-
-        return $"client:{context.Connection.RemoteIpAddress?.ToString() ?? "unknown"}";
+        // Anything the shared reader will not vouch for falls back to a per-caller partition,
+        // so an ambiguous session header cannot buy a fresh rate-limit bucket.
+        return McpSessionHeader.Read(context, out var sessionId) == McpSessionHeaderState.Valid
+            ? $"session:{sessionId}"
+            : $"client:{context.Connection.RemoteIpAddress?.ToString() ?? "unknown"}";
     }
-
-    private static bool IsValidSessionId(string? sessionId)
-    {
-        if (string.IsNullOrEmpty(sessionId) || sessionId.Length > MaxSessionIdLength)
-        {
-            return false;
-        }
-
-        foreach (var character in sessionId)
-        {
-            if (!IsHttpTokenCharacter(character))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static bool IsHttpTokenCharacter(char character) =>
-        character is >= '0' and <= '9' or
-            >= 'A' and <= 'Z' or
-            >= 'a' and <= 'z' or
-            '!' or '#' or '$' or '%' or '&' or '\'' or '*' or '+' or '-' or '.' or
-            '^' or '_' or '`' or '|' or '~';
 }

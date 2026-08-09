@@ -267,6 +267,7 @@ policy controls still apply.
 | Setting | Environment variable | Default |
 | --- | --- | --- |
 | HTTP bearer token | `TEAMSPHONE_MCP_BEARER_TOKEN` | Required for HTTP |
+| Named client tokens | `Auth__ClientTokens__<clientId>` | One token per caller; several accepted at once |
 | Confirmation signing key | `TEAMSPHONE_MCP_CONFIRMATION_TOKEN_KEY` | Ephemeral key if omitted |
 | Server execution ceiling | `TEAMSPHONE_MCP_MODE` | `full` outside Compose; Compose uses `whatif` |
 | HTTP bind address | `ASPNETCORE_URLS` | Host configuration |
@@ -280,6 +281,25 @@ policy controls still apply.
 The server mode can be `full`, `whatif`, or `readonly`. A mode is a ceiling: a client
 session can request a more restrictive mode, but cannot elevate beyond the server
 setting.
+
+### Naming your clients
+
+`TEAMSPHONE_MCP_BEARER_TOKEN` is recorded in the audit trail as the client `default`.
+To tell callers apart — and to rotate a token without downtime — give each one its own
+entry instead:
+
+```bash
+export Auth__ClientTokens__orchestrator='…'
+export Auth__ClientTokens__inspector='…'
+```
+
+Every configured token is accepted simultaneously, so rotation is: add the new entry,
+move the caller across, then remove the old one. The `clientId` written to the audit
+trail is always the one the server matched, never a value the client asserts, so
+attribution cannot be forged. Startup fails if two clients share a token, because the
+audit trail could not then tell them apart. A session belongs to the client that opened
+it: presenting another client's `Mcp-Session-Id` is rejected with `401`, as is a request
+that repeats the header, since the session it names would then be ambiguous.
 
 ## Project status and roadmap
 

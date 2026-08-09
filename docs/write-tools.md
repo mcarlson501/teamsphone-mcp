@@ -25,12 +25,29 @@ that compensate completed child steps in reverse order.
 ## The two-step protocol
 
 1. **Dry run (default).** A call without `dryRun: false` never writes. The host runs
-  `snapshot → preflight → dryrun` and returns `status: DryRunCompleted` with a
-   `confirmationToken` (HMAC over toolId + canonicalized params + tenantId + expiry,
-   15 minute TTL) plus the planned changes in `diff.after`.
+   `snapshot → preflight → dryrun` and returns `status: DryRunCompleted` with a
+   `confirmationToken` (HMAC over a random `jti` + toolId + tenantId + canonicalized
+   params + the issuing session and client + expiry, 15 minute TTL) plus the planned
+   changes in `diff.after`.
 2. **Execute.** Calling again with `dryRun: false` **and** that token runs
    `snapshot → execute → verify`. Any change to the parameters invalidates the token, so
    a changed plan always requires a fresh dry run.
+
+A token is **single use** and **bound to its caller**. Redeeming it records its `jti`,
+so the same token cannot be presented twice, and it is only redeemable in the session
+and by the client that requested the dry-run. One consequence worth knowing: a write
+that fails *after* the token was accepted needs a fresh dry-run rather than a retry
+with the same token.
+
+| Error code | Meaning |
+| --- | --- |
+| `missingConfirmationToken` | Execute was requested without a token. |
+| `invalidConfirmationToken` | Signature, tool, tenant, or parameters do not match. |
+| `expiredConfirmationToken` | Past the 15 minute TTL. |
+| `replayedConfirmationToken` | Already redeemed; repeat the dry-run. |
+| `sessionBoundConfirmationToken` | Issued to a different MCP session. |
+| `clientBoundConfirmationToken` | Issued to a different authenticated client. |
+| `confirmationTokenCacheExhausted` | The host cannot currently guarantee single use, so it refuses rather than risk a replay. |
 
 `whatIf` is an accepted alias for `dryRun`. A session initialized with
 `_meta.whatIfMode: true`, or a server started with `TEAMSPHONE_MCP_MODE=whatif`, forces

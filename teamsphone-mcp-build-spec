@@ -462,6 +462,13 @@ Closes two concrete gaps in the §6.4 protocol.
 
 ✅ A replayed token is rejected; a token redeemed in a different session is rejected; audit records attribute two different callers distinctly.
 
+**Delivered.** All four items shipped. Notes for later milestones:
+- `Validate` is now a *redeeming* operation: it records the token's `jti` as spent. A write that fails after the token was accepted therefore needs a fresh dry-run. This is deliberate, and is the behaviour that makes `move-number-between-users` A→B followed by B→A impossible from one token.
+- The redeemed-`jti` cache is **per process and in memory**. Replicas sharing a signing key do not share the record of what has been spent, so single-use is only guaranteed for a single host today. A shared cache is the prerequisite for running replicas; §15 S4 or M7 is the natural home for it.
+- `request.Server.SessionId` is **null** on the Streamable HTTP transport. The session id reaches tools through `IMcpRequestSessionAccessor`, an `AsyncLocal` set by the MCP message filter. Anything needing per-session state must use that accessor, not `request.Server`. The same pattern (`AuthenticatedClientAccessor`) carries the authenticated client id from the auth middleware into tools.
+- Attributed C# tools and manifest pipeline tools build their audit context in two different places (`ManifestValidatingMcpServerTool` and `ManifestPipelineTool`). Both must be updated together whenever a new audit field is added, or half the catalog silently records null.
+- Config is `Auth:ClientTokens:<clientId> = <token>`, keyed by client rather than by token, so secrets never become configuration key names. `TEAMSPHONE_MCP_BEARER_TOKEN` is retained as the client `default`.
+
 ### S3 — Constrained tool execution (own milestone; blocks accepting outside tool contributions)
 
 The most serious finding and the one that cannot be retrofitted cheaply. `PowerShellTenantSessionFactory` creates runspaces via `RunspaceFactory.CreateRunspace()` with no `InitialSessionState`, so every `run.ps1` executes in FullLanguage, in-process, with full .NET reflection. A malicious or merely careless contributed tool can read the confirmation-token signing key, reach other tenants' certificate private keys in process memory, open network connections, and write arbitrary files — none of which the §6.4 policy engine can observe, because it all happens inside the same process.

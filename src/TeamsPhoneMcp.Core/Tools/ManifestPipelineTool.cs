@@ -68,9 +68,14 @@ public sealed class ManifestPipelineTool : McpServerTool
 
         var correlationId = Guid.NewGuid().ToString();
         var serverMode = ServerModeCeiling.Resolve(services);
+
+        // The transport's session id reaches tools through the request accessor, not through
+        // request.Server, which does not carry it on the Streamable HTTP transport.
+        var sessionId = services.GetService<IMcpRequestSessionAccessor>()?.SessionId;
+        var clientId = services.GetService<IAuthenticatedClientAccessor>()?.ClientId;
         var sessionWhatIfMode = services
             .GetRequiredService<IMcpSessionPolicyStore>()
-            .IsWhatIfMode(request.Server?.SessionId);
+            .IsWhatIfMode(sessionId);
         var effectiveWhatIfMode =
             serverMode == ServerModeCeiling.Mode.WhatIf || sessionWhatIfMode;
         var timeProvider = services.GetService<TimeProvider>() ?? TimeProvider.System;
@@ -84,8 +89,9 @@ public sealed class ManifestPipelineTool : McpServerTool
             businessParameters,
             Simulated: effectiveWhatIfMode)
         {
-            SessionId = request.Server?.SessionId,
-            ClientId = DescribeClient(request),
+            SessionId = sessionId,
+            ClientId = clientId,
+            ReportedClient = DescribeClient(request),
         };
 
         var paginationResolver = services.GetRequiredService<ToolPaginationResolver>();
@@ -134,7 +140,10 @@ public sealed class ManifestPipelineTool : McpServerTool
                 reader.OptionalInt("blastRadius", defaultValue: 1),
                 reader.OptionalBool("allowTier3") ?? false,
                 reader.OptionalInt("maxRiskTier", defaultValue: 3),
-                SessionWhatIfMode: effectiveWhatIfMode),
+                SessionWhatIfMode: effectiveWhatIfMode)
+            {
+                Binding = new ConfirmationTokenBinding(sessionId, clientId)
+            },
             timeProvider.GetUtcNow());
 
         var runner = services.GetRequiredService<IToolPipelineRunner>();
@@ -173,7 +182,10 @@ public sealed class ManifestPipelineTool : McpServerTool
         return ToCallToolResult(envelope);
     }
 
-    /// <summary>Best-effort client attribution; absent on transports that do not report it.</summary>
+    /// <summary>
+    /// The client's self-reported name/version. Recorded alongside, never in place of, the
+    /// server-derived client id, because anything the client asserts is unverified.
+    /// </summary>
     private static string? DescribeClient(RequestContext<CallToolRequestParams> request)
     {
         var clientInfo = request.Server?.ClientInfo;

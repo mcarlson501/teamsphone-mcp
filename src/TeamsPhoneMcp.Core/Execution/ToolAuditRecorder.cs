@@ -16,8 +16,11 @@ public sealed record ToolAuditContext(
     /// <summary>MCP session the call arrived on, when the transport exposes one.</summary>
     public string? SessionId { get; init; }
 
-    /// <summary>Reported client identity (name/version), used to attribute changes.</summary>
+    /// <summary>Caller identity derived server-side from the matched bearer token.</summary>
     public string? ClientId { get; init; }
+
+    /// <summary>The client's unverified self-reported name/version.</summary>
+    public string? ReportedClient { get; init; }
 }
 
 /// <summary>
@@ -82,6 +85,7 @@ public sealed class ToolAuditRecorder : IToolAuditRecorder
                 CorrelationId = context.CorrelationId,
                 SessionId = context.SessionId,
                 ClientId = context.ClientId,
+                ReportedClient = AuditRedactor.ScrubText(context.ReportedClient),
                 TenantId = context.TenantId,
                 ToolId = context.Manifest.Id,
                 ToolVersion = context.Manifest.Version,

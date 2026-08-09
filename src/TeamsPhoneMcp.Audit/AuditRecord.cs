@@ -19,7 +19,17 @@ public sealed record AuditRecord
 
     public string? SessionId { get; init; }
 
+    /// <summary>
+    /// Caller identity derived server-side from the bearer token that opened the session.
+    /// Never asserted by the client, so attribution cannot be forged.
+    /// </summary>
     public string? ClientId { get; init; }
+
+    /// <summary>
+    /// The name/version the client reported about itself. Unverified, and recorded only as
+    /// context alongside <see cref="ClientId"/>.
+    /// </summary>
+    public string? ReportedClient { get; init; }
 
     /// <summary>Tenant the call targeted; also selects the JSONL file it lands in.</summary>
     public required string TenantId { get; init; }

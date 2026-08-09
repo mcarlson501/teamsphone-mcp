@@ -72,7 +72,9 @@ public class Program
                 {
                     options.BearerToken = envToken;
                 }
-            });
+            })
+            .ValidateOnStart();
+        builder.Services.AddSingleton<IValidateOptions<BearerAuthOptions>, BearerAuthOptionsValidator>();
         builder.Services
             .AddOptions<McpRateLimitOptions>()
             .Bind(builder.Configuration.GetSection(McpRateLimitOptions.SectionName))

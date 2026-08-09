@@ -13,6 +13,7 @@ public sealed class MockWriteTool(
     WritePolicyEngine policyEngine,
     IMcpRequestSessionAccessor? requestSessionAccessor = null,
     IMcpSessionPolicyStore? sessionPolicyStore = null,
+    IAuthenticatedClientAccessor? authenticatedClientAccessor = null,
     IConfiguration? configuration = null)
 {
     private const string ToolId = "mock-write-user-policy";
@@ -32,7 +33,8 @@ public sealed class MockWriteTool(
         var manifest = manifestCatalog.GetRequired(ToolId);
         var correlationId = Guid.NewGuid().ToString();
         var serverMode = ServerModeCeiling.Resolve(configuration);
-        var sessionWhatIfMode = sessionPolicyStore?.IsWhatIfMode(requestSessionAccessor?.SessionId) ?? false;
+        var sessionId = requestSessionAccessor?.SessionId;
+        var sessionWhatIfMode = sessionPolicyStore?.IsWhatIfMode(sessionId) ?? false;
         var effectiveWhatIfMode =
             serverMode == ServerModeCeiling.Mode.WhatIf || sessionWhatIfMode;
 
@@ -70,7 +72,12 @@ public sealed class MockWriteTool(
                 blastRadius,
                 AllowTier3: false,
                 MaxRiskTier: 3,
-                SessionWhatIfMode: effectiveWhatIfMode),
+                SessionWhatIfMode: effectiveWhatIfMode)
+            {
+                Binding = new ConfirmationTokenBinding(
+                    sessionId,
+                    authenticatedClientAccessor?.ClientId)
+            },
             DateTimeOffset.UtcNow);
 
         if (!decision.Approved)
