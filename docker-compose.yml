@@ -1,0 +1,35 @@
+services:
+  teamsphone-mcp:
+    image: teamsphone-mcp:local
+    build:
+      context: .
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${TEAMSPHONE_MCP_PORT:-5199}:8080"
+    environment:
+      TEAMSPHONE_MCP_BEARER_TOKEN: ${TEAMSPHONE_MCP_BEARER_TOKEN:?Set TEAMSPHONE_MCP_BEARER_TOKEN in .env}
+      TEAMSPHONE_MCP_CONFIRMATION_TOKEN_KEY: ${TEAMSPHONE_MCP_CONFIRMATION_TOKEN_KEY:?Set TEAMSPHONE_MCP_CONFIRMATION_TOKEN_KEY in .env}
+      TEAMSPHONE_MCP_MODE: ${TEAMSPHONE_MCP_MODE:-whatif}
+      TEAMSPHONE_MCP_CERTIFICATE_PASSWORD: ${TEAMSPHONE_MCP_CERTIFICATE_PASSWORD:?Set TEAMSPHONE_MCP_CERTIFICATE_PASSWORD in .env}
+      Audit__RootPath: /data/audit
+      Credentials__default__TenantId: ${TEAMSPHONE_MCP_TENANT_ID:?Set TEAMSPHONE_MCP_TENANT_ID in .env}
+      Credentials__default__ClientId: ${TEAMSPHONE_MCP_CLIENT_ID:?Set TEAMSPHONE_MCP_CLIENT_ID in .env}
+      Credentials__default__CertificatePath: /run/teamsphone-mcp/tenant-certificate.pfx
+      Credentials__default__CertificatePasswordEnvVar: TEAMSPHONE_MCP_CERTIFICATE_PASSWORD
+    volumes:
+      - type: bind
+        source: ${TEAMSPHONE_MCP_CERTIFICATE_PATH:?Set TEAMSPHONE_MCP_CERTIFICATE_PATH in .env}
+        target: /run/teamsphone-mcp/tenant-certificate.pfx
+        read_only: true
+      - type: volume
+        source: audit
+        target: /data/audit
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+
+volumes:
+  audit:

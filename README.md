@@ -17,13 +17,15 @@ execution.
 The repository is tenant-agnostic and contains no customer data or baked-in
 credentials. Tenant credentials are supplied entirely through local configuration.
 
-> **Project status:** Milestones M1–M5.5 are complete. Interfaces, manifests, and
-> configuration may change without backward compatibility before the first release.
+> **Project status:** Milestones M1–M5.5 are complete and M6 hardening is in progress.
+> Interfaces, manifests, and configuration may change without backward compatibility
+> before the first release.
 
 ## What works today
 
 - Streamable HTTP and stdio MCP transports.
 - Fail-closed bearer authentication for HTTP and correlation-aware request logging.
+- Per-session HTTP rate limiting with a configurable 30 calls/minute default.
 - Strict YAML manifests with startup schema and annotation parity checks.
 - Raw tool-argument validation before C# binding.
 - Risk tiers, blast-radius checks, dry-run defaults, and HMAC confirmation tokens.
@@ -46,12 +48,12 @@ credentials. Tenant credentials are supplied entirely through local configuratio
   storage, and a retention sweeper — see [`docs/audit.md`](./docs/audit.md).
 - Tenant-scoped local audit query, change-detail, and Markdown/CSV export tools with
   signed, filter-bound pagination.
-- Release build and test coverage in GitHub Actions.
+- Release build, .NET and Pester tests, and full-history secret scanning in GitHub Actions.
 
 ## Not implemented yet
 
 - Phase E shared-object writes.
-- Container packaging or a supported release artifact.
+- A supported tagged release artifact.
 - Hash-chained audit records and OpenTelemetry export (planned post-v1).
 
 See [`teamsphone-mcp-build-spec`](./teamsphone-mcp-build-spec) for the milestone
@@ -150,6 +152,20 @@ dotnet test  TeamsPhoneMcp.sln
 pwsh -NoProfile -c "Invoke-Pester -Path tools"
 ```
 
+## Container quickstart
+
+The multi-architecture image includes PowerShell and the pinned MicrosoftTeams
+module. Configure `.env`, then start the localhost-only, `whatif`-by-default
+Compose deployment:
+
+```bash
+cp .env.example .env
+docker compose up --build --detach
+```
+
+See [`docs/container.md`](./docs/container.md) for credential mounts, generated
+keys, audit persistence, verification, and updates.
+
 ## Development quickstart
 
 These commands run the local development host. Listing tools does not connect to
@@ -168,6 +184,8 @@ The host selects its transport from the command line / environment:
 | Setting                        | Env var / config key                          | Purpose                                   |
 | ------------------------------ | --------------------------------------------- | ----------------------------------------- |
 | Client auth token (HTTP)       | `TEAMSPHONE_MCP_BEARER_TOKEN` (or `Auth:BearerToken`) | Static token clients must present    |
+| HTTP rate-limit permits        | `RateLimiting__PermitLimit` (or `RateLimiting:PermitLimit`) | Calls allowed per MCP session window; default `30` |
+| HTTP rate-limit window         | `RateLimiting__Window` (or `RateLimiting:Window`) | Fixed MCP session window; default `00:01:00` |
 | Confirmation token signing key | `TEAMSPHONE_MCP_CONFIRMATION_TOKEN_KEY` (or `Policy:ConfirmationTokenKey`) | Base64 key to keep dry-run confirmation tokens valid across restarts |
 | Server mode ceiling             | `TEAMSPHONE_MCP_MODE` (or `ServerMode`) | `full` (default), `whatif`, or `readonly` |
 | Tool manifest root             | `ToolManifests__ToolsRootPath` (or `ToolManifests:ToolsRootPath`) | Optional manifest directory override |
@@ -244,7 +262,8 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:5199/mcp \
 
 ## Next milestone
 
-M6 hardens packaging, documentation, CI, and the first supported container release.
+M6 is in progress. HTTP rate limiting, CI hardening, and container packaging are
+complete; documentation polish and the first supported release remain.
 
 ## License
 

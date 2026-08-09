@@ -153,17 +153,17 @@ public sealed class ConfirmationTokenService : IConfirmationTokenService
         switch (element.ValueKind)
         {
             case JsonValueKind.Object:
-            {
-                writer.WriteStartObject();
-                foreach (var property in element.EnumerateObject().OrderBy(p => p.Name, StringComparer.Ordinal))
                 {
-                    writer.WritePropertyName(property.Name);
-                    WriteCanonicalJson(property.Value, writer);
-                }
+                    writer.WriteStartObject();
+                    foreach (var property in element.EnumerateObject().OrderBy(p => p.Name, StringComparer.Ordinal))
+                    {
+                        writer.WritePropertyName(property.Name);
+                        WriteCanonicalJson(property.Value, writer);
+                    }
 
-                writer.WriteEndObject();
-                break;
-            }
+                    writer.WriteEndObject();
+                    break;
+                }
             case JsonValueKind.Array:
                 writer.WriteStartArray();
                 foreach (var item in element.EnumerateArray())

@@ -235,7 +235,8 @@ public sealed class PhaseAIntegrationTests : IDisposable
         return null;
     }
 
-    private static async Task<McpClient> CreateClientAsync(WebApplicationFactory<Program> factory)    {
+    private static async Task<McpClient> CreateClientAsync(WebApplicationFactory<Program> factory)
+    {
         var httpClient = factory.CreateClient();
         httpClient.Timeout = TimeSpan.FromMinutes(10);
         httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", BearerToken);

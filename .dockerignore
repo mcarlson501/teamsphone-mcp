@@ -1,0 +1,16 @@
+.git
+.github
+.vs
+.vscode
+**/bin
+**/obj
+audit
+Library
+testResults.xml
+.env*
+*.cer
+*.key
+*.p12
+*.pfx
+docs
+tests

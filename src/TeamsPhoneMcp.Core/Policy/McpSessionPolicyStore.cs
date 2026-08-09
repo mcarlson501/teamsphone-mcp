@@ -66,7 +66,7 @@ internal sealed class McpSessionPolicyStore : IMcpSessionPolicyStore
                 .Initialize(context.Server.SessionId, request.Params);
         }
 
-            await next(context, cancellationToken).ConfigureAwait(false);
+        await next(context, cancellationToken).ConfigureAwait(false);
     };
 
     private static bool ReadWhatIfMode(JsonNode? parameters)

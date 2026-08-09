@@ -82,7 +82,7 @@ public class ContinuationTokenServiceTests
     [InlineData("")]
     [InlineData("invalid")]
     [InlineData("invalid.token.extra")]
-    [InlineData("%%%.%%%")] 
+    [InlineData("%%%.%%%")]
     public void Validate_RejectsMalformedToken(string token)
     {
         var validation = CreateService().Validate(

@@ -39,6 +39,9 @@ credential is not configured).
 # Build first (warnings are errors — keep it clean).
 dotnet build TeamsPhoneMcp.sln
 
+# Verify whitespace, code style, and analyzer formatting.
+dotnet format TeamsPhoneMcp.sln --verify-no-changes --no-restore
+
 # Run the complete offline suite even if live-test variables are exported.
 dotnet test TeamsPhoneMcp.sln --filter 'FullyQualifiedName!~IntegrationTests'
 
@@ -87,6 +90,21 @@ pwsh -NoProfile -c "Invoke-Pester -Path tools -Output Detailed"
 ```
 
 No tenant required — the Teams cmdlets are stubbed inside `BeforeAll`.
+CI runs the same suite with Pester 6.0.0 and `-CI`, so any failed tool test fails the
+workflow.
+
+## Secret scanning
+
+CI scans the complete Git history with Gitleaks 8.30.1. To reproduce the gate locally:
+
+```bash
+gitleaks git --redact --verbose --no-banner .
+```
+
+Known synthetic fixtures are narrowly scoped in [`.gitleaks.toml`](../.gitleaks.toml)
+by detector, path, and fixture marker. Do not add path-wide exclusions or baselines for
+new findings; investigate them and rotate any real credential before changing the scan
+configuration.
 
 ---
 
