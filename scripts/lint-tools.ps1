@@ -45,8 +45,24 @@ try {
     }
     Write-Host "Custom rules loaded: $(($customRules.RuleName | Sort-Object) -join ', ')"
 
+    # PSScriptAnalyzer occasionally throws a NullReferenceException from inside its own
+    # engine on a cold CI runner. Findings come back as objects rather than errors, so a
+    # bounded retry cannot hide a real violation — it only survives the crash.
     $findings = @($Path | ForEach-Object {
-            Invoke-ScriptAnalyzer -Path $_ -Recurse -Settings $settingsPath
+            $target = $_
+            for ($attempt = 1; ; $attempt++) {
+                try {
+                    Invoke-ScriptAnalyzer -Path $target -Recurse -Settings $settingsPath
+                    break
+                }
+                catch {
+                    if ($attempt -ge 3) {
+                        throw "PSScriptAnalyzer failed on '$target' after $attempt attempts: $_"
+                    }
+
+                    Write-Host "PSScriptAnalyzer threw on '$target' (attempt $attempt); retrying: $_"
+                }
+            }
         })
 
     $order = @{ Information = 0; Warning = 1; Error = 2; ParseError = 3 }
