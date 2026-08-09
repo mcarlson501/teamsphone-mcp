@@ -37,11 +37,11 @@ RUN apt-get update \
     && test -f "/powershell/Modules/MicrosoftTeams/${MICROSOFT_TEAMS_VERSION}/MicrosoftTeams.psd1"
 
 COPY Directory.Build.props global.json ./
-COPY src/TeamsPhoneMcp.Audit/TeamsPhoneMcp.Audit.csproj src/TeamsPhoneMcp.Audit/
-COPY src/TeamsPhoneMcp.Core/TeamsPhoneMcp.Core.csproj src/TeamsPhoneMcp.Core/
-COPY src/TeamsPhoneMcp.Credentials/TeamsPhoneMcp.Credentials.csproj src/TeamsPhoneMcp.Credentials/
-COPY src/TeamsPhoneMcp.Host/TeamsPhoneMcp.Host.csproj src/TeamsPhoneMcp.Host/
-RUN dotnet restore src/TeamsPhoneMcp.Host/TeamsPhoneMcp.Host.csproj
+COPY src/TeamsPhoneMcp.Audit/TeamsPhoneMcp.Audit.csproj src/TeamsPhoneMcp.Audit/packages.lock.json src/TeamsPhoneMcp.Audit/
+COPY src/TeamsPhoneMcp.Core/TeamsPhoneMcp.Core.csproj src/TeamsPhoneMcp.Core/packages.lock.json src/TeamsPhoneMcp.Core/
+COPY src/TeamsPhoneMcp.Credentials/TeamsPhoneMcp.Credentials.csproj src/TeamsPhoneMcp.Credentials/packages.lock.json src/TeamsPhoneMcp.Credentials/
+COPY src/TeamsPhoneMcp.Host/TeamsPhoneMcp.Host.csproj src/TeamsPhoneMcp.Host/packages.lock.json src/TeamsPhoneMcp.Host/
+RUN dotnet restore src/TeamsPhoneMcp.Host/TeamsPhoneMcp.Host.csproj --locked-mode
 
 COPY src/ src/
 COPY tools/ tools/

@@ -30,7 +30,7 @@ jobs:
           global-json-file: global.json
 
       - name: Restore
-        run: dotnet restore TeamsPhoneMcp.sln
+        run: dotnet restore TeamsPhoneMcp.sln --locked-mode
 
       - name: Verify formatting
         run: dotnet format TeamsPhoneMcp.sln --verify-no-changes --no-restore
@@ -57,6 +57,83 @@ jobs:
       - name: Test PowerShell tools
         shell: pwsh
         run: Invoke-Pester -Path tools -CI -Output Detailed
+
+  script-analysis:
+    name: PowerShell lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install analyzers
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Scope CurrentUser -Force -SkipPublisherCheck
+          Install-Module Pester -RequiredVersion 6.0.0 -Scope CurrentUser -Force -SkipPublisherCheck
+
+      # Proves the banned-construct rules actually fire before they gate the repo.
+      - name: Test custom analyzer rules
+        shell: pwsh
+        run: Invoke-Pester -Path scripts/analyzer -CI -Output Detailed
+
+      - name: Analyze PowerShell surface
+        shell: pwsh
+        run: ./scripts/lint-tools.ps1
+
+  log-scrubber:
+    name: Log scrubber
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Scan host output for credential material
+        run: ./scripts/log-scrubber-check.sh
+
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        with:
+          languages: csharp
+          build-mode: manual
+          queries: security-and-quality
+
+      - name: Build
+        run: |
+          dotnet restore TeamsPhoneMcp.sln --locked-mode
+          dotnet build TeamsPhoneMcp.sln --configuration Release --no-restore
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        with:
+          category: /language:csharp
 
   secret-scan:
     name: Secret scan

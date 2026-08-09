@@ -25,6 +25,7 @@ change so the work can be aligned with the milestone plan.
 ```bash
 dotnet build TeamsPhoneMcp.sln
 dotnet test  TeamsPhoneMcp.sln
+pwsh -NoProfile -File scripts/lint-tools.ps1
 ```
 
 For the full testing playbook — PowerShell (Pester) tests, a local server smoke test, and a
@@ -33,6 +34,15 @@ gated live end-to-end call against a real tenant — see [docs/testing.md](docs/
 - Target framework: **.NET 8** (pinned via `global.json`).
 - Shared build settings live in `Directory.Build.props` (`nullable`, implicit usings,
   warnings-as-errors). Keep the build warning-clean.
+- Dependencies are locked. `packages.lock.json` is committed per project and CI restores
+  with `--locked-mode`; run `dotnet restore` and commit the updated lock files whenever
+  you change a `PackageReference`.
+- NuGet auditing is on for transitive packages at `low` severity, so a new advisory fails
+  the build. Pin the patched version explicitly rather than suppressing the warning.
+- `Invoke-Expression`/`iex`, `Add-Type`, `Start-Process`/`saps`/`start`, and
+  `[ScriptBlock]::Create` are rejected by the PSScriptAnalyzer gate anywhere under
+  `tools/` and `scripts/`. These are not style preferences — they defeat the policy
+  engine, and there is no approved use of them in this repository.
 
 ## Project structure
 
