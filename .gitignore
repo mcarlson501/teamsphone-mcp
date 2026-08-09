@@ -490,3 +490,7 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Finder/iCloud duplication artifacts such as "Program 2.cs" or "notes 3.md".
+# These are byte-identical copies that break the build with CS0101 if committed.
+* [2-9].*

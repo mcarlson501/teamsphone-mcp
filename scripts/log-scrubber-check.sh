@@ -46,7 +46,14 @@ cert_file="$workdir/seeded.pfx"
 write_seeded_pem "$cert_file"
 
 echo "Building host..."
-dotnet build src/TeamsPhoneMcp.Host/TeamsPhoneMcp.Host.csproj --configuration Release >/dev/null
+# Quiet on success, but surface the compiler output on failure: swallowing it
+# turns any build break into a bare "exit 1" from this gate.
+if ! build_output="$(dotnet build src/TeamsPhoneMcp.Host/TeamsPhoneMcp.Host.csproj \
+  --configuration Release 2>&1)"; then
+  echo "error: the host failed to build, so the scrubber has nothing to scan." >&2
+  echo "$build_output" >&2
+  exit 1
+fi
 
 echo "Starting host on 127.0.0.1:${port}..."
 env \
