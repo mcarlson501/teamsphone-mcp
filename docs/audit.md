@@ -60,7 +60,8 @@ escape the audit root.
   "timestamp": "2026-07-31T20:25:15.627314+00:00",
   "correlationId": "ae275f3c-362d-4470-bb00-9787d34f28b5",
   "sessionId": "…",              // MCP session id, when the transport supplies one
-  "clientId": "inspector/0.1.0", // MCP client name/version, when supplied
+  "clientId": "orchestrator",    // server-derived from the matched bearer token
+  "reportedClient": "inspector/0.1.0", // unverified name/version the client claims
   "tenantId": "11111111-…",
   "toolId": "mock-write-user-policy",
   "toolVersion": "1.0.0",
@@ -84,6 +85,15 @@ escape the audit root.
 Null fields are omitted. `correlationId` is lifted from the tool's own result envelope
 when the tool produced one, so a client-facing error and its audit record always share
 the same id.
+
+### Who did it: `clientId` vs `reportedClient`
+
+`clientId` is the name of the configured `Auth:ClientTokens` entry whose token the host
+matched on the request (or `default` for the single-token form). The client cannot
+influence it, so attribution stands up to scrutiny. `reportedClient` is the
+`clientInfo` name/version the client sent about itself: useful context, but unverified,
+and it must not be relied on for attribution. On the stdio transport, which is treated
+as locally trusted and carries no bearer token, `clientId` is absent.
 
 ---
 

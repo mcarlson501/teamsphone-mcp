@@ -31,10 +31,12 @@ public static class ToolRegistration
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.Services.AddSingleton(CreateTokenSigningKey);
+        builder.Services.AddSingleton<ConsumedConfirmationTokenCache>();
         builder.Services.AddSingleton<IConfirmationTokenService>(sp =>
             new ConfirmationTokenService(
                 sp.GetRequiredService<TokenSigningKey>().Value,
-                TimeSpan.FromMinutes(15)));
+                TimeSpan.FromMinutes(15),
+                sp.GetRequiredService<ConsumedConfirmationTokenCache>()));
         builder.Services.AddSingleton<IContinuationTokenService>(sp =>
             new ContinuationTokenService(
                 sp.GetRequiredService<TokenSigningKey>().Value,
@@ -44,6 +46,10 @@ public static class ToolRegistration
         builder.Services.AddSingleton<McpSessionPolicyStore>();
         builder.Services.AddSingleton<IMcpSessionPolicyStore>(services =>
             services.GetRequiredService<McpSessionPolicyStore>());
+        builder.Services.AddSingleton<McpSessionOwnershipStore>();
+        builder.Services.AddSingleton<AuthenticatedClientAccessor>();
+        builder.Services.AddSingleton<IAuthenticatedClientAccessor>(services =>
+            services.GetRequiredService<AuthenticatedClientAccessor>());
         builder.Services.AddSingleton<McpRequestSessionAccessor>();
         builder.Services.AddSingleton<IMcpRequestSessionAccessor>(services =>
             services.GetRequiredService<McpRequestSessionAccessor>());

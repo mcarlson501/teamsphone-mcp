@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using TeamsPhoneMcp.Core.Execution;
+using TeamsPhoneMcp.Core.Policy;
 using TeamsPhoneMcp.Core.Tools;
 
 namespace TeamsPhoneMcp.Core.Manifests;
@@ -30,7 +31,7 @@ public sealed class ManifestValidatingMcpServerTool(McpServerTool innerTool)
 
         var arguments = request.Params?.Arguments;
         var recorder = services.GetService<IToolAuditRecorder>();
-        var auditContext = BuildAuditContext(manifest, arguments);
+        var auditContext = BuildAuditContext(manifest, arguments, services);
 
         try
         {
@@ -71,7 +72,8 @@ public sealed class ManifestValidatingMcpServerTool(McpServerTool innerTool)
 
     private static ToolAuditContext BuildAuditContext(
         ToolManifest manifest,
-        IDictionary<string, JsonElement>? arguments)
+        IDictionary<string, JsonElement>? arguments,
+        IServiceProvider services)
     {
         var tenantId = arguments is not null &&
             arguments.TryGetValue("tenantId", out var tenant) &&
@@ -96,7 +98,11 @@ public sealed class ManifestValidatingMcpServerTool(McpServerTool innerTool)
             Guid.NewGuid().ToString(),
             tenantId,
             JsonSerializer.SerializeToElement(business, SerializerOptions),
-            Simulated: false);
+            Simulated: false)
+        {
+            SessionId = services.GetService<IMcpRequestSessionAccessor>()?.SessionId,
+            ClientId = services.GetService<IAuthenticatedClientAccessor>()?.ClientId,
+        };
     }
 
     /// <summary>
