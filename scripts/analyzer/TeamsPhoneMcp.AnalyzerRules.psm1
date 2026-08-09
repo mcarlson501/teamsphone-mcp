@@ -23,6 +23,22 @@ $script:BannedCommandReasons = @{
     'Start-Process'     = 'spawns an unconstrained child process outside the audited execution pipeline'
 }
 
+function Get-UnqualifiedCommandName {
+    <#
+    .SYNOPSIS
+        Reduces a command name to the form the banned list is keyed on.
+
+    .DESCRIPTION
+        PowerShell resolves module-qualified names such as
+        Microsoft.PowerShell.Management\Start-Process to the same command as the bare name,
+        so the qualified form must not slip past the gate. Path-qualified names are
+        normalized the same way, since .\Start-Process is equally a way of writing it.
+    #>
+    param([Parameter(Mandatory)][string]$Name)
+
+    ($Name -split '[\\/]')[-1].ToLowerInvariant()
+}
+
 function New-TeamsPhoneDiagnostic {
     [CmdletBinding()]
     [OutputType([Microsoft.Windows.PowerShell.ScriptAnalyzer.Generic.DiagnosticRecord])]
@@ -85,7 +101,7 @@ function Measure-TeamsPhoneUnsafeExecution {
             continue
         }
 
-        $canonical = $script:BannedCommands[$name.ToLowerInvariant()]
+        $canonical = $script:BannedCommands[(Get-UnqualifiedCommandName $name)]
         if ($null -eq $canonical) {
             continue
         }

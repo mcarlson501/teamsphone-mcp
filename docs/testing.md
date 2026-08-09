@@ -100,7 +100,9 @@ Every `run.ps1` is analyzed with PSScriptAnalyzer 1.25.0 plus the custom rules i
 The custom rule `Measure-TeamsPhoneUnsafeExecution` reports an **Error** for
 `Invoke-Expression` (and `iex`), `Add-Type`, `Start-Process` (and `saps`/`start`), and
 `[ScriptBlock]::Create`, which turns the build spec's "no generic execution tool"
-policy into an enforced gate.
+policy into an enforced gate. Command names are reduced to their unqualified form
+first, so `Microsoft.PowerShell.Management\Start-Process` is caught exactly like the
+bare name.
 
 ```bash
 # Error-severity findings fail; warnings and information are printed for review.

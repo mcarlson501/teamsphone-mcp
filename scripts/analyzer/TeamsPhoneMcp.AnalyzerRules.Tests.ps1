@@ -28,14 +28,30 @@ Describe 'Measure-TeamsPhoneUnsafeExecution' {
         @{ Name = 'Add-Type'; Script = 'Add-Type -TypeDefinition "public class C {}"' }
         @{ Name = 'Start-Process'; Script = 'Start-Process -FilePath /bin/sh' }
         @{ Name = 'the saps alias'; Script = 'saps /bin/sh' }
+        @{ Name = 'the start alias'; Script = 'start /bin/sh' }
+        @{ Name = 'an ampersand invocation'; Script = "& 'Start-Process' /bin/sh" }
         @{ Name = '[ScriptBlock]::Create'; Script = '$sb = [ScriptBlock]::Create("Get-Date"); & $sb' }
         @{ Name = 'the fully qualified scriptblock factory'; Script = '[System.Management.Automation.ScriptBlock]::Create("Get-Date")' }
+        # Module qualification resolves to the same command, so it must not slip past.
+        @{ Name = 'a module-qualified Start-Process'; Script = 'Microsoft.PowerShell.Management\Start-Process -FilePath /bin/sh' }
+        @{ Name = 'a module-qualified Invoke-Expression'; Script = 'Microsoft.PowerShell.Utility\Invoke-Expression "Get-Date"' }
+        @{ Name = 'a module-qualified Add-Type'; Script = 'Microsoft.PowerShell.Utility\Add-Type -TypeDefinition "public class C {}"' }
+        @{ Name = 'a module-qualified alias'; Script = 'Microsoft.PowerShell.Utility\iex "Get-Date"' }
+        @{ Name = 'a path-qualified Start-Process'; Script = '.\Start-Process' }
     ) {
         $findings = Invoke-CustomRule -Script $Script
 
         $findings | Should -Not -BeNullOrEmpty
         $findings[0].RuleName | Should -BeLike '*Measure-TeamsPhoneUnsafeExecution'
         [string]$findings[0].Severity | Should -Be 'Error'
+    }
+
+    It 'does not flag <Name>, which merely resembles a banned command' -ForEach @(
+        @{ Name = 'a command ending in the banned name'; Script = 'Get-StartProcess' }
+        @{ Name = 'a Teams cmdlet from a qualified module'; Script = 'MicrosoftTeams\Get-CsOnlineUser -Identity a@b.com' }
+        @{ Name = 'a variable named after a banned command'; Script = '$startProcess = 1; Write-Output $startProcess' }
+    ) {
+        Invoke-CustomRule -Script $Script | Should -BeNullOrEmpty
     }
 
     It 'leaves ordinary tool code alone' {
