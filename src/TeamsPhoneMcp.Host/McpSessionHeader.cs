@@ -46,23 +46,10 @@ internal static class McpSessionHeader
         return McpSessionHeaderState.Valid;
     }
 
-    private static bool IsWellFormed(string? sessionId)
-    {
-        if (string.IsNullOrEmpty(sessionId) || sessionId.Length > MaxLength)
-        {
-            return false;
-        }
-
-        foreach (var character in sessionId)
-        {
-            if (!IsHttpTokenCharacter(character))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
+    private static bool IsWellFormed(string? sessionId) =>
+        !string.IsNullOrEmpty(sessionId) &&
+        sessionId.Length <= MaxLength &&
+        sessionId.All(IsHttpTokenCharacter);
 
     private static bool IsHttpTokenCharacter(char character) =>
         character is >= '0' and <= '9' or

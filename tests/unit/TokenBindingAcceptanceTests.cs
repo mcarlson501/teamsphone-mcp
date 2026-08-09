@@ -215,8 +215,7 @@ public sealed class TokenBindingAcceptanceTests
         var recordingSink = new RecordingAuditSink();
         sink = recordingSink;
 
-        var seed = new WebApplicationFactory<Program>();
-        var configured = seed.WithWebHostBuilder(builder =>
+        return new TestServerHost(builder =>
         {
             if (configureNamedTokens)
             {
@@ -235,24 +234,26 @@ public sealed class TokenBindingAcceptanceTests
                 services.AddSingleton<IAuditSink>(recordingSink);
             });
         });
-
-        return new TestServerHost(seed, configured);
     }
 
     /// <summary>
     /// Owns both factories: <c>WithWebHostBuilder</c> returns a second instance and does not
     /// dispose the one it was called on.
     /// </summary>
-    private sealed class TestServerHost(
-        WebApplicationFactory<Program> seed,
-        WebApplicationFactory<Program> configured) : IAsyncDisposable
+    private sealed class TestServerHost : IAsyncDisposable
     {
-        public HttpClient CreateClient() => configured.CreateClient();
+        private readonly WebApplicationFactory<Program> _seed = new();
+        private readonly WebApplicationFactory<Program> _configured;
+
+        public TestServerHost(Action<IWebHostBuilder> configure) =>
+            _configured = _seed.WithWebHostBuilder(configure);
+
+        public HttpClient CreateClient() => _configured.CreateClient();
 
         public async ValueTask DisposeAsync()
         {
-            await configured.DisposeAsync();
-            await seed.DisposeAsync();
+            await _configured.DisposeAsync();
+            await _seed.DisposeAsync();
         }
     }
 
