@@ -54,6 +54,21 @@ internal sealed class BearerAuthOptionsValidator : IValidateOptions<BearerAuthOp
             }
         }
 
+        // A policy naming a client that does not exist is almost always a typo, and silently
+        // ignoring it would leave the caller the operator meant to restrict fully able to write.
+        var configuredClients = resolved
+            .Select(pair => pair.Key)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var clientId in options.ClientPolicy.Keys)
+        {
+            if (!configuredClients.Contains(clientId))
+            {
+                failures.Add(
+                    $"Auth: the policy for client '{clientId}' does not match any configured client. " +
+                    $"Add a token for it under Auth:ClientTokens, or remove Auth:ClientPolicy:{clientId}.");
+            }
+        }
+
         return failures.Count == 0
             ? ValidateOptionsResult.Success
             : ValidateOptionsResult.Fail(failures);
@@ -63,11 +78,12 @@ internal sealed class BearerAuthOptionsValidator : IValidateOptions<BearerAuthOp
 /// <summary>
 /// Result of matching a presented bearer token against the configured clients.
 /// </summary>
-internal readonly record struct ClientAuthentication(bool IsAuthenticated, string? ClientId)
+internal readonly record struct ClientAuthentication(bool IsAuthenticated, string? ClientId, bool WhatIfMode)
 {
     public static ClientAuthentication Anonymous => default;
 
-    public static ClientAuthentication For(string clientId) => new(true, clientId);
+    public static ClientAuthentication For(string clientId, bool whatIfMode) =>
+        new(true, clientId, whatIfMode);
 }
 
 /// <summary>
@@ -76,7 +92,7 @@ internal readonly record struct ClientAuthentication(bool IsAuthenticated, strin
 /// </summary>
 internal sealed class ClientTokenRegistry
 {
-    private readonly IReadOnlyList<(string ClientId, byte[] TokenHash)> _clients;
+    private readonly IReadOnlyList<(string ClientId, byte[] TokenHash, bool WhatIfMode)> _clients;
 
     public ClientTokenRegistry(BearerAuthOptions options)
     {
@@ -87,7 +103,8 @@ internal sealed class ClientTokenRegistry
         _clients = options.ResolveClientTokens()
             .Select(pair => (
                 ClientId: pair.Key,
-                TokenHash: SHA256.HashData(Encoding.UTF8.GetBytes(pair.Value))))
+                TokenHash: SHA256.HashData(Encoding.UTF8.GetBytes(pair.Value)),
+                options.ResolvePolicy(pair.Key).WhatIfMode))
             .ToList();
     }
 
@@ -100,14 +117,21 @@ internal sealed class ClientTokenRegistry
         // Every entry is compared even after a match so the work done does not reveal
         // which client matched, or how many entries precede it.
         string? matched = null;
-        foreach (var (clientId, tokenHash) in _clients)
+        var matchedWhatIfMode = false;
+        foreach (var (clientId, tokenHash, whatIfMode) in _clients)
         {
             if (CryptographicOperations.FixedTimeEquals(presentedHash, tokenHash))
             {
-                matched ??= clientId;
+                if (matched is null)
+                {
+                    matched = clientId;
+                    matchedWhatIfMode = whatIfMode;
+                }
             }
         }
 
-        return matched is null ? ClientAuthentication.Anonymous : ClientAuthentication.For(matched);
+        return matched is null
+            ? ClientAuthentication.Anonymous
+            : ClientAuthentication.For(matched, matchedWhatIfMode);
     }
 }

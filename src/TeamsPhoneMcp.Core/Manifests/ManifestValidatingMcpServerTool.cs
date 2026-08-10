@@ -58,6 +58,11 @@ public sealed class ManifestValidatingMcpServerTool(McpServerTool innerTool)
             auditContext = auditContext with { CorrelationId = interpreted.CorrelationId };
         }
 
+        if (interpreted.Simulated)
+        {
+            auditContext = auditContext with { Simulated = true };
+        }
+
         await RecordAsync(
             recorder,
             auditContext,
@@ -110,19 +115,26 @@ public sealed class ManifestValidatingMcpServerTool(McpServerTool innerTool)
     /// correlation id are lifted from the structured content when present — the
     /// audit entry then points at the same identifier the client received.
     /// </summary>
-    private static (ToolExecutionStatus Status, string? ErrorCode, string? Message, string? CorrelationId)
+    private static (ToolExecutionStatus Status, string? ErrorCode, string? Message, string? CorrelationId, bool Simulated)
         InterpretResult(CallToolResult result)
     {
         var status = result.IsError == true ? ToolExecutionStatus.Failed : ToolExecutionStatus.Succeeded;
         string? errorCode = null;
         string? message = null;
         string? correlationId = null;
+        var simulated = false;
 
         if (TryReadResultObject(result) is { } content)
         {
             if (content.TryGetProperty("correlationId", out var id) && id.ValueKind == JsonValueKind.String)
             {
                 correlationId = id.GetString();
+            }
+
+            // Taken from the tool's own result so a simulated write is not recorded as a real one.
+            if (content.TryGetProperty("simulated", out var flag) && flag.ValueKind == JsonValueKind.True)
+            {
+                simulated = true;
             }
 
             if (content.TryGetProperty("errorCode", out var code) && code.ValueKind == JsonValueKind.String)
@@ -142,7 +154,7 @@ public sealed class ManifestValidatingMcpServerTool(McpServerTool innerTool)
             }
         }
 
-        return (status, errorCode, message, correlationId);
+        return (status, errorCode, message, correlationId, simulated);
     }
 
     /// <summary>

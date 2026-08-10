@@ -72,12 +72,15 @@ public sealed class ManifestPipelineTool : McpServerTool
         // The transport's session id reaches tools through the request accessor, not through
         // request.Server, which does not carry it on the Streamable HTTP transport.
         var sessionId = services.GetService<IMcpRequestSessionAccessor>()?.SessionId;
-        var clientId = services.GetService<IAuthenticatedClientAccessor>()?.ClientId;
+        var clientAccessor = services.GetService<IAuthenticatedClientAccessor>();
+        var clientId = clientAccessor?.ClientId;
         var sessionWhatIfMode = services
             .GetRequiredService<IMcpSessionPolicyStore>()
             .IsWhatIfMode(sessionId);
         var effectiveWhatIfMode =
-            serverMode == ServerModeCeiling.Mode.WhatIf || sessionWhatIfMode;
+            serverMode == ServerModeCeiling.Mode.WhatIf ||
+            clientAccessor?.WhatIfMode == true ||
+            sessionWhatIfMode;
         var timeProvider = services.GetService<TimeProvider>() ?? TimeProvider.System;
 
         // Every exit path below writes exactly one audit record (build spec §9.1).

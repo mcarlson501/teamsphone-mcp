@@ -28,7 +28,10 @@ tenants, so security is treated as acceptance-blocking, not optional:
   receive `401` with no tool listing. If no token is configured, the transport fails
   closed. The `clientId` in the audit trail is derived server-side from the token that
   matched, never asserted by the client, and a session may only be used by the client
-  that opened it.
+  that opened it. A client can additionally be restricted to simulation only with
+  `Auth:ClientPolicy:<clientId>:WhatIfMode=true`; because the operator sets it rather
+  than the caller, it cannot be declined, and it holds on transports that issue no
+  session id.
 - **No secrets in the repo or logs.** Tokens and credentials are read from
   configuration/environment only; they are never hardcoded and never logged. Do not
   commit secrets, tenant names, or real phone numbers in code, tests, or fixtures.

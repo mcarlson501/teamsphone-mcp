@@ -102,7 +102,7 @@ public sealed class BearerAuthMiddleware
 
         // The MCP message for this request is dispatched inside _next, so tools resolve the
         // caller from this scope rather than from anything the client sent.
-        using var clientScope = _clientAccessor.Enter(clientId);
+        using var clientScope = _clientAccessor.Enter(clientId, authentication.WhatIfMode);
         await _next(context);
     }
 

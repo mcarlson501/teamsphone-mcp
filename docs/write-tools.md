@@ -49,10 +49,19 @@ with the same token.
 | `clientBoundConfirmationToken` | Issued to a different authenticated client. |
 | `confirmationTokenCacheExhausted` | The host cannot currently guarantee single use, so it refuses rather than risk a replay. |
 
-`whatIf` is an accepted alias for `dryRun`. A session initialized with
-`_meta.whatIfMode: true`, or a server started with `TEAMSPHONE_MCP_MODE=whatif`, forces
-every write call through the dry-run path even when it requests `dryRun: false`. The
-result has `simulated: true` and no confirmation token. `readonly` hides tier 1+ tools
+`whatIf` is an accepted alias for `dryRun`. Three independent ceilings force every write
+call through the dry-run path even when it requests `dryRun: false`, and any one of them is
+enough — the result has `simulated: true` and no confirmation token is issued:
+
+| Ceiling | Set by | Scope |
+| --- | --- | --- |
+| `TEAMSPHONE_MCP_MODE=whatif` | operator | the whole server |
+| `Auth:ClientPolicy:<clientId>:WhatIfMode=true` | operator | one authenticated client |
+| `_meta.whatIfMode: true` at initialize | the client | one MCP session |
+
+Only the last is client-chosen, so only the last can be declined by the caller. It also
+requires a transport that issues an `Mcp-Session-Id`; where none exists the server refuses
+the initialize rather than quietly dropping the ceiling. `readonly` hides tier 1+ tools
 entirely.
 
 Example (arguments only — transport details are in the README):

@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using TeamsPhoneMcp.Core.Execution;
 using TeamsPhoneMcp.Core.Sessions;
 using TeamsPhoneMcp.Host;
+using TeamsPhoneMcp.Host.Auth;
 
 namespace TeamsPhoneMcp.UnitTests;
 
@@ -93,6 +94,67 @@ public sealed class SessionWhatIfAcceptanceTests
     }
 
     [Fact]
+    public async Task ClientWhatIfMode_ForcesSimulationEvenWhenTheClientDoesNotAskForIt()
+    {
+        var executor = new FakeStageExecutor();
+        await using var host = CreateServerHost(executor, clientWhatIfMode: true);
+        using var client = host.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", BearerToken);
+
+        // The operator sets this ceiling, so asking for whatIfMode: false must not shed it.
+        var sessionId = await InitializeSessionAsync(client, whatIfMode: false);
+        var envelope = await CallMoveAsync(client, sessionId);
+
+        AssertSimulatedWithoutToken(envelope);
+        Assert.Equal([ToolStage.Snapshot, ToolStage.Preflight, ToolStage.DryRun], executor.InvokedStages);
+    }
+
+    [Fact]
+    public async Task ClientWhatIfMode_ForcesSimulationForAttributedWriteTool()
+    {
+        await using var host = CreateServerHost(new FakeStageExecutor(), clientWhatIfMode: true);
+        using var client = host.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", BearerToken);
+
+        var sessionId = await InitializeSessionAsync(client, whatIfMode: false);
+        var response = await PostAsync(
+            client,
+            new
+            {
+                jsonrpc = "2.0",
+                id = 2,
+                method = "tools/call",
+                @params = new
+                {
+                    name = "mock-write-user-policy",
+                    arguments = new Dictionary<string, object?>
+                    {
+                        ["tenantId"] = "11111111-1111-1111-1111-111111111111",
+                        ["targetUserUpn"] = "target@contoso.com",
+                        ["policyName"] = "Global",
+                        ["dryRun"] = false,
+                    },
+                },
+            },
+            sessionId);
+
+        response.EnsureSuccessStatusCode();
+        var payload = await ReadJsonRpcPayloadAsync(response);
+        Assert.False(payload.TryGetProperty("error", out _), payload.GetRawText());
+        var resultText = payload
+            .GetProperty("result")
+            .GetProperty("content")[0]
+            .GetProperty("text")
+            .GetString();
+        using var resultDocument = JsonDocument.Parse(Assert.IsType<string>(resultText));
+        var result = resultDocument.RootElement;
+        Assert.True(result.GetProperty("simulated").GetBoolean());
+        Assert.True(
+            !result.TryGetProperty("confirmationToken", out var token) ||
+            token.ValueKind == JsonValueKind.Null);
+    }
+
+    [Fact]
     public async Task InvalidSessionWhatIfMode_IsRejectedDuringInitialization()
     {
         await using var host = CreateServerHost(new FakeStageExecutor());
@@ -123,13 +185,20 @@ public sealed class SessionWhatIfAcceptanceTests
 
     private static TestServerHost CreateServerHost(
         FakeStageExecutor executor,
-        string? serverMode = null) =>
+        string? serverMode = null,
+        bool clientWhatIfMode = false) =>
         new(builder =>
         {
             builder.UseSetting("TEAMSPHONE_MCP_BEARER_TOKEN", BearerToken);
             if (serverMode is not null)
             {
                 builder.UseSetting("TEAMSPHONE_MCP_MODE", serverMode);
+            }
+            if (clientWhatIfMode)
+            {
+                builder.UseSetting(
+                    $"Auth:ClientPolicy:{BearerAuthOptions.DefaultClientId}:WhatIfMode",
+                    "true");
             }
             builder.ConfigureServices(services =>
             {
