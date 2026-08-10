@@ -37,12 +37,17 @@ public sealed class InitCommandTests : IDisposable
         Assert.True(File.Exists(prepared.PrivateCertificatePath));
         Assert.True(File.Exists(prepared.EnvironmentFilePath));
 
+        var environment = await File.ReadAllTextAsync(prepared.EnvironmentFilePath);
+        var pfxPassword = ReadEnvironmentValue(environment, "TEAMSPHONE_MCP_CERTIFICATE_PASSWORD");
+        var bearerToken = ReadEnvironmentValue(environment, "TEAMSPHONE_MCP_BEARER_TOKEN");
+        var signingKey = ReadEnvironmentValue(environment, "TEAMSPHONE_MCP_CONFIRMATION_TOKEN_KEY");
+
         var keyStorageFlags = OperatingSystem.IsMacOS()
             ? X509KeyStorageFlags.DefaultKeySet
             : X509KeyStorageFlags.EphemeralKeySet;
         using var certificate = new X509Certificate2(
             prepared.PrivateCertificatePath,
-            prepared.CertificatePassword,
+            pfxPassword,
             keyStorageFlags);
         Assert.True(certificate.HasPrivateKey);
         Assert.Equal("CN=teamsphone-mcp-default", certificate.Subject);
@@ -58,7 +63,6 @@ public sealed class InitCommandTests : IDisposable
             DateTime.UtcNow.AddDays(364),
             DateTime.UtcNow.AddDays(366));
 
-        var environment = await File.ReadAllTextAsync(prepared.EnvironmentFilePath);
         Assert.Contains("TEAMSPHONE_MCP_MODE=whatif", environment, StringComparison.Ordinal);
         Assert.Contains($"TEAMSPHONE_MCP_TENANT_ID={options.TenantId:D}", environment, StringComparison.Ordinal);
         Assert.Contains($"TEAMSPHONE_MCP_CLIENT_ID={options.ClientId:D}", environment, StringComparison.Ordinal);
@@ -67,9 +71,9 @@ public sealed class InitCommandTests : IDisposable
         var visibleOutput = output.ToString();
         Assert.Contains(prepared.PublicCertificatePath, visibleOutput, StringComparison.Ordinal);
         Assert.Contains(prepared.Thumbprint, visibleOutput, StringComparison.Ordinal);
-        Assert.DoesNotContain(prepared.CertificatePassword, visibleOutput, StringComparison.Ordinal);
-        Assert.DoesNotContain(prepared.BearerToken, visibleOutput, StringComparison.Ordinal);
-        Assert.DoesNotContain(prepared.SigningKey, visibleOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain(pfxPassword, visibleOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain(bearerToken, visibleOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain(signingKey, visibleOutput, StringComparison.Ordinal);
 
         if (!OperatingSystem.IsWindows())
         {
@@ -242,6 +246,15 @@ public sealed class InitCommandTests : IDisposable
         }
 
         return response;
+    }
+
+    private static string ReadEnvironmentValue(string environment, string name)
+    {
+        var prefix = $"{name}=";
+        var line = environment
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Single(value => value.StartsWith(prefix, StringComparison.Ordinal));
+        return line[prefix.Length..].Trim('"');
     }
 
     private sealed class RecordingProcessRunner : IInitProcessRunner

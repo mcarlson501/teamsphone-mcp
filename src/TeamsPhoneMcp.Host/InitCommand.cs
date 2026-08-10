@@ -133,10 +133,7 @@ internal static partial class InitCommand
             certificate.NotAfter.ToUniversalTime(),
             publicCertificatePath,
             privateCertificatePath,
-            environmentFilePath,
-            certificatePassword,
-            bearerToken,
-            signingKey);
+            environmentFilePath);
 
         await output.WriteLineAsync("Prepared TeamsPhone MCP local configuration.");
         await output.WriteLineAsync($"Public certificate: {publicCertificatePath}");
@@ -839,10 +836,7 @@ internal sealed record InitPreparation(
     DateTime CertificateExpiresUtc,
     string PublicCertificatePath,
     string PrivateCertificatePath,
-    string EnvironmentFilePath,
-    string CertificatePassword,
-    string BearerToken,
-    string SigningKey);
+    string EnvironmentFilePath);
 
 internal sealed record InitVerifyOptions(
     string ProjectDirectory,
