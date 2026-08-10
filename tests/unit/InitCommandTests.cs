@@ -38,7 +38,6 @@ public sealed class InitCommandTests : IDisposable
         Assert.True(File.Exists(prepared.EnvironmentFilePath));
 
         var environment = await File.ReadAllTextAsync(prepared.EnvironmentFilePath);
-        var pfxPassword = ReadEnvironmentValue(environment, "TEAMSPHONE_MCP_CERTIFICATE_PASSWORD");
         var bearerToken = ReadEnvironmentValue(environment, "TEAMSPHONE_MCP_BEARER_TOKEN");
         var signingKey = ReadEnvironmentValue(environment, "TEAMSPHONE_MCP_CONFIRMATION_TOKEN_KEY");
 
@@ -47,7 +46,7 @@ public sealed class InitCommandTests : IDisposable
             : X509KeyStorageFlags.EphemeralKeySet;
         using var certificate = new X509Certificate2(
             prepared.PrivateCertificatePath,
-            pfxPassword,
+            password: (string?)null,
             keyStorageFlags);
         Assert.True(certificate.HasPrivateKey);
         Assert.Equal("CN=teamsphone-mcp-default", certificate.Subject);
@@ -71,7 +70,6 @@ public sealed class InitCommandTests : IDisposable
         var visibleOutput = output.ToString();
         Assert.Contains(prepared.PublicCertificatePath, visibleOutput, StringComparison.Ordinal);
         Assert.Contains(prepared.Thumbprint, visibleOutput, StringComparison.Ordinal);
-        Assert.DoesNotContain(pfxPassword, visibleOutput, StringComparison.Ordinal);
         Assert.DoesNotContain(bearerToken, visibleOutput, StringComparison.Ordinal);
         Assert.DoesNotContain(signingKey, visibleOutput, StringComparison.Ordinal);
 

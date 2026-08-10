@@ -250,10 +250,12 @@ permission, consent, and role steps. The complete portal path and manual fallbac
 ```
 
 This Docker-only command builds the local image, generates a one-year test certificate,
-writes the gitignored `.env`, stores the password-protected PFX under
+writes the gitignored `.env`, stores the private PFX under
 `~/.config/teamsphone-mcp`, and creates independent random bearer and confirmation-token
 keys. Generated secret files are mode `0600` on Linux and the server starts in `whatif`.
-No private key, PFX password, bearer token, or signing key is printed.
+The generated evaluation PFX is unencrypted and protected by mode `0600`; manually
+supplied password-protected PFX files remain supported. No private key, bearer token, or
+signing key is printed.
 
 Upload the public `.cer` path printed by the command to the Entra app, grant the printed
 Graph application permissions and admin consent, and assign Teams Communications

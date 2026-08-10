@@ -99,7 +99,6 @@ internal static partial class InitCommand
         SetDirectoryPermissions(certificateDirectory);
 
         var subject = $"CN={certificateBaseName}";
-        var certificatePassword = CreateSecret();
         using var certificate = CreateCertificate(subject);
 
         await File.WriteAllBytesAsync(
@@ -108,7 +107,7 @@ internal static partial class InitCommand
             cancellationToken);
         await WriteSecretFileAsync(
             privateCertificatePath,
-            certificate.Export(X509ContentType.Pkcs12, certificatePassword),
+            certificate.Export(X509ContentType.Pkcs12),
             cancellationToken);
 
         var bearerToken = CreateSecret();
@@ -116,7 +115,6 @@ internal static partial class InitCommand
         var environment = BuildEnvironmentFile(
             options,
             privateCertificatePath,
-            certificatePassword,
             bearerToken,
             signingKey);
         await WriteSecretFileAsync(
@@ -417,7 +415,6 @@ internal static partial class InitCommand
     private static string BuildEnvironmentFile(
         InitPrepareOptions options,
         string privateCertificatePath,
-        string certificatePassword,
         string bearerToken,
         string signingKey) =>
         string.Join(
@@ -430,7 +427,7 @@ internal static partial class InitCommand
             $"TEAMSPHONE_MCP_TENANT_ID={options.TenantId:D}",
             $"TEAMSPHONE_MCP_CLIENT_ID={options.ClientId:D}",
             $"TEAMSPHONE_MCP_CERTIFICATE_PATH={QuoteEnvironmentValue(privateCertificatePath)}",
-            $"TEAMSPHONE_MCP_CERTIFICATE_PASSWORD={QuoteEnvironmentValue(certificatePassword)}",
+            "TEAMSPHONE_MCP_CERTIFICATE_PASSWORD=",
             string.Empty);
 
     private static string QuoteEnvironmentValue(string value)

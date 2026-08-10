@@ -30,13 +30,17 @@ directory tenant ID and application client ID:
 The command:
 
 - builds `teamsphone-mcp:local` from the tagged source;
-- generates a password-protected PFX and public `.cer` under
+- generates an unencrypted evaluation PFX and public `.cer` under
   `~/.config/teamsphone-mcp`;
 - writes the Compose `.env` with independent random bearer and signing keys;
 - applies mode `0700` to the certificate directory and `0600` to secret files on Linux;
 - defaults the server to `TEAMSPHONE_MCP_MODE=whatif`; and
 - prints the public certificate path, thumbprint, expiry, and exact remaining Entra
   permission and role steps without printing any secret.
+
+The generated PFX relies on its mode-`0600` file permission rather than a stored
+password, avoiding a second cleartext secret beside the private key. Use the manual path
+below when organizational policy requires a password-protected PFX.
 
 Complete steps 2 and 4 below with the generated public certificate. Then verify the
 configuration and a real tenant read:

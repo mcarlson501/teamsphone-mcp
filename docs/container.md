@@ -12,7 +12,7 @@ the local `teamsphone-mcp:local` image from the Dockerfile.
 ## Prerequisites
 
 - Docker Engine or Docker Desktop with Compose v2
-- An Entra app and password-protected PFX from
+- An Entra app and PFX from
   [setup-entra-app.md](setup-entra-app.md)
 
 ## Configure
