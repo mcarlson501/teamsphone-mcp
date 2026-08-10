@@ -781,10 +781,10 @@
       },
       "ModelContextProtocol.AspNetCore": {
         "type": "Transitive",
-        "resolved": "1.4.0",
-        "contentHash": "Q/xGhfhbCfZsoeEsEqBeiyzr6AJw2cBUTKN3Giz3QRmWyRzn62ISsgJCTnk2/VPMNj2/Spb2jYpPahnMZWvaPg==",
+        "resolved": "2.1.0",
+        "contentHash": "yhJ8bBXIgrX0mAgRYRgzcbH3bLdv3MDSkG52utRW9EAAtQrPw/g7Q/T6EurxKV+L+Zefv8VVUYcNbXEOd9GgfA==",
         "dependencies": {
-          "ModelContextProtocol": "1.4.0"
+          "ModelContextProtocol": "[2.1.0]"
         }
       },
       "ModelContextProtocol.Core": {
@@ -2179,7 +2179,7 @@
       "teamsphonemcp.host": {
         "type": "Project",
         "dependencies": {
-          "ModelContextProtocol.AspNetCore": "[1.4.0, )",
+          "ModelContextProtocol.AspNetCore": "[2.1.0, )",
           "TeamsPhoneMcp.Core": "[1.0.0, )"
         }
       }

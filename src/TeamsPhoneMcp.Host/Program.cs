@@ -118,7 +118,16 @@ public class Program
 
         builder.Services
             .AddMcpServer()
-            .WithHttpTransport()
+            .WithHttpTransport(options =>
+            {
+                // Keep Streamable HTTP sessions alive. As of the 2026-07-28 protocol revision
+                // (SEP-2567) the SDK defaults Stateless to true, which drops Mcp-Session-Id
+                // entirely. Session ids are load-bearing here: confirmation tokens are bound to
+                // them (Policy/ConfirmationTokenService), session ownership is claimed per client
+                // (Policy/McpSessionOwnershipStore), and rate limiting partitions on them
+                // (RateLimiting/McpRateLimitPolicy). Revisit only alongside a replacement binding.
+                options.Stateless = false;
+            })
             .AddTeamsPhoneTools()
             .AddPowerShellStageExecution()
             .AddLocalTenantCredentials();
