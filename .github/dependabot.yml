@@ -24,6 +24,12 @@ updates:
       # fail to compile, so hold the 7.4.x line until the host retargets.
       - dependency-name: Microsoft.PowerShell.SDK
         versions: [">=7.5.0"]
+      # Microsoft.Extensions.* 8.0.x is what the ASP.NET Core 8 shared framework
+      # carries. Taking 9.x/10.x on a net8.0 app deploys app-local assemblies that
+      # override the shared framework for no functional gain, since we only use the
+      # abstractions. Track the 8.0.x patch line and revisit when the host retargets.
+      - dependency-name: Microsoft.Extensions.*
+        versions: [">=9.0.0"]
 
   # Actions are SHA-pinned, so nothing updates them without this.
   - package-ecosystem: github-actions
