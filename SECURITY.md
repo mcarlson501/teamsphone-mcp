@@ -35,6 +35,12 @@ tenants, so security is treated as acceptance-blocking, not optional:
 - **No secrets in the repo or logs.** Tokens and credentials are read from
   configuration/environment only; they are never hardcoded and never logged. Do not
   commit secrets, tenant names, or real phone numbers in code, tests, or fixtures.
+- **Guided setup secrets are permission-protected, not encrypted.** On Linux,
+  `init prepare` writes the bearer token and confirmation-token HMAC key in plaintext to
+  a gitignored `.env` with mode `0600`. Its generated PFX is unencrypted and also mode
+  `0600`, inside a mode-`0700` directory. The local account, host root, and backups are
+  therefore trusted. Use the manual password-protected PFX path or an external secret
+  manager where local plaintext files do not meet policy.
 - **No generic execution tool.** Every write is an enumerated, single-purpose,
   schema-validated tool. Raw arguments are checked before handler binding, and the
   host fails startup if its strict manifest and exposed tool contracts drift. There

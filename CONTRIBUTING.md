@@ -1,13 +1,14 @@
 # Contributing to teamsphone-mcp
 
-Thanks for your interest in contributing. This is a pre-release project under active
-development. Public APIs and manifest contracts may change before the first release,
-and the repository is not ready for production or live-tenant use.
+Thanks for your interest in contributing. This is an experimental `0.x` project under
+active development. Public APIs and manifest contracts may change between minor
+releases, and the repository is not ready for production or live-tenant use.
 
 The current surface includes manifest-driven read and write tools, Streamable HTTP and
-stdio transports, certificate-authenticated tenant sessions, audit recording, and
-container packaging. M6 hardening and preparation for the first supported release are
-in progress. Report bugs and focused enhancement proposals through
+stdio transports, certificate-authenticated tenant sessions, audit recording, guided
+setup, and container packaging. Milestones M1-M6.5 are implemented for the `v0.1.0`
+release candidate; external Ubuntu, VS Code, and demo-tenant acceptance remains before
+the tag. Report bugs and focused enhancement proposals through
 [GitHub Issues](https://github.com/mcarlson501/teamsphone-mcp/issues); open an issue
 before starting a broad architectural change so it can be aligned with the milestone
 plan.

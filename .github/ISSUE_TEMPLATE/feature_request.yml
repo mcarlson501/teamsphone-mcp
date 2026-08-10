@@ -1,0 +1,66 @@
+name: Feature request
+description: Propose a focused capability or improvement
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the operational problem before proposing implementation. Broad
+        architectural changes should align with the build milestones before code begins.
+        Use synthetic examples only.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Tool catalog
+        - Write safety and policy
+        - Authentication and tenant sessions
+        - Audit and reporting
+        - Setup and deployment
+        - Documentation and contributor experience
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Operational problem
+      description: What administrator or integration problem cannot be solved today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed outcome
+      description: Describe the desired behavior, not just an implementation technique.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety and audit implications
+      description: Note risk tier, blast radius, dry-run/rollback needs, permissions, tenant isolation, and audit evidence where applicable.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched existing issues and the build specification for overlapping scope.
+          required: true
+        - label: All examples are synthetic and contain no customer or credential material.
+          required: true
