@@ -200,6 +200,52 @@ public sealed class TokenBindingAcceptanceTests
         Assert.Contains("share the same", failure.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task StartupFailsWhenAClientPolicyNamesNoConfiguredClient()
+    {
+        await using var factory = CreateFactory(
+            out _,
+            builder => builder.UseSetting("Auth:ClientPolicy:alhpa:WhatIfMode", "true"));
+
+        // A typo here would otherwise leave 'alpha' fully able to write while the operator
+        // believed it was restricted to simulation.
+        var failure = await Assert.ThrowsAsync<Microsoft.Extensions.Options.OptionsValidationException>(
+            async () =>
+            {
+                using var client = factory.CreateClient();
+                await client.GetAsync("/");
+            });
+
+        Assert.Contains("does not match any configured client", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AClientRestrictedToWhatIfModeIsIssuedNoConfirmationToken()
+    {
+        await using var host = CreateFactory(
+            out _,
+            builder => builder.UseSetting("Auth:ClientPolicy:alpha:WhatIfMode", "true"));
+        using var alpha = CreateClient(host, AlphaToken);
+        using var beta = CreateClient(host, BetaToken);
+
+        var restricted = await CallMockWriteAsync(
+            alpha,
+            await InitializeSessionAsync(alpha),
+            dryRun: true);
+        Assert.True(restricted.GetProperty("simulated").GetBoolean());
+        Assert.True(
+            !restricted.TryGetProperty("confirmationToken", out var restrictedToken) ||
+            restrictedToken.ValueKind == JsonValueKind.Null);
+
+        // The ceiling is per client, so the unrestricted one still gets a real dry-run token.
+        var unrestricted = await CallMockWriteAsync(
+            beta,
+            await InitializeSessionAsync(beta),
+            dryRun: true);
+        Assert.False(unrestricted.GetProperty("simulated").GetBoolean());
+        Assert.Equal(JsonValueKind.String, unrestricted.GetProperty("confirmationToken").ValueKind);
+    }
+
     private static HttpClient CreateClient(TestServerHost host, string token)
     {
         var client = host.CreateClient();

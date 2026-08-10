@@ -9,6 +9,9 @@
     <PackageReference Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="TeamsPhoneMcp.UnitTests" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\TeamsPhoneMcp.Audit\TeamsPhoneMcp.Audit.csproj" />

@@ -30,6 +30,20 @@ public sealed class BearerAuthOptions
         new Dictionary<string, string>(StringComparer.Ordinal);
 
     /// <summary>
+    /// Per-client policy as <c>clientId -&gt; policy</c>, from
+    /// <c>Auth:ClientPolicy:&lt;clientId&gt;</c>. Operator-set, so unlike the session ceiling a
+    /// client asks for at initialize, the client cannot decline it. Keys must name a client
+    /// configured above; startup fails otherwise, because a typo would silently grant a caller
+    /// the write access the operator meant to withhold.
+    /// </summary>
+    public IDictionary<string, ClientPolicyOptions> ClientPolicy { get; } =
+        new Dictionary<string, ClientPolicyOptions>(StringComparer.Ordinal);
+
+    /// <summary>Resolves the configured policy for a client, defaulting to no restriction.</summary>
+    public ClientPolicyOptions ResolvePolicy(string clientId) =>
+        ClientPolicy.TryGetValue(clientId, out var policy) ? policy : new ClientPolicyOptions();
+
+    /// <summary>
     /// Flattens both forms into the <c>clientId -&gt; token</c> set the middleware enforces.
     /// Values are trimmed to match how the <c>Bearer</c> header is parsed, and whitespace-only
     /// values are treated as unset — otherwise a stray space would leave the host looking
@@ -55,4 +69,16 @@ public sealed class BearerAuthOptions
 
         return resolved;
     }
+}
+
+/// <summary>
+/// Operator-set restrictions applied to every call from one client.
+/// </summary>
+public sealed class ClientPolicyOptions
+{
+    /// <summary>
+    /// When true this client can only ever simulate writes: every write returns
+    /// <c>simulated: true</c> and no confirmation token is issued (build spec §6.4 rule 6).
+    /// </summary>
+    public bool WhatIfMode { get; set; }
 }

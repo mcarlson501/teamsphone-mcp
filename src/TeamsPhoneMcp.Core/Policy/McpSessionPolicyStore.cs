@@ -46,12 +46,24 @@ internal sealed class McpSessionPolicyStore : IMcpSessionPolicyStore
 
     public void Initialize(string? sessionId, JsonNode? parameters)
     {
+        var whatIfMode = ReadWhatIfMode(parameters);
+
         if (sessionId is null)
         {
+            // Refused rather than ignored: silently dropping the ceiling would hand back a
+            // session that executes writes to a caller that asked for one that cannot.
+            if (whatIfMode)
+            {
+                throw new ModelContextProtocol.McpException(
+                    "Session what-if mode requires a transport that issues a session id, and this " +
+                    "one does not. Set TEAMSPHONE_MCP_MODE=whatif for a server-wide ceiling, or " +
+                    "Auth:ClientPolicy:<clientId>:WhatIfMode=true for a per-client one.");
+            }
+
             return;
         }
 
-        _whatIfModes.TryAdd(sessionId, ReadWhatIfMode(parameters));
+        _whatIfModes.TryAdd(sessionId, whatIfMode);
     }
 
     public static McpMessageFilter CreateInitializationFilter() => next => async (context, cancellationToken) =>

@@ -36,7 +36,9 @@ public sealed class MockWriteTool(
         var sessionId = requestSessionAccessor?.SessionId;
         var sessionWhatIfMode = sessionPolicyStore?.IsWhatIfMode(sessionId) ?? false;
         var effectiveWhatIfMode =
-            serverMode == ServerModeCeiling.Mode.WhatIf || sessionWhatIfMode;
+            serverMode == ServerModeCeiling.Mode.WhatIf ||
+            authenticatedClientAccessor?.WhatIfMode == true ||
+            sessionWhatIfMode;
 
         if (serverMode == ServerModeCeiling.Mode.ReadOnly)
         {
