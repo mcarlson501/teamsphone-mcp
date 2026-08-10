@@ -32,6 +32,11 @@ and container packaging.
 
 ### Trust boundaries and known limitations
 
+- **Guided setup stores local secrets in plaintext.** The generated `.env` contains the
+  HTTP bearer token and confirmation-token HMAC key, and the generated PFX contains an
+  unencrypted private key. On Linux these files are mode `0600` inside the local
+  operator trust boundary; use the manual password-protected PFX path or an external
+  secret manager when local plaintext files do not meet policy.
 - **Streamable HTTP uses the sessionful protocol path.** Version 0.1.0 explicitly keeps
   the transport stateful because session ownership, confirmation-token binding, and rate
   limiting depend on `Mcp-Session-Id`. It supports the pre-SEP-2567 session model and

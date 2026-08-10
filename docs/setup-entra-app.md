@@ -42,6 +42,15 @@ The generated PFX relies on its mode-`0600` file permission rather than a stored
 password, avoiding a second cleartext secret beside the private key. Use the manual path
 below when organizational policy requires a password-protected PFX.
 
+> [!IMPORTANT]
+> The generated `.env` stores the HTTP bearer token and confirmation-token HMAC key in
+> plaintext, and the generated PFX contains an unencrypted private key. On Linux, setup
+> creates `.env` and the PFX with mode `0600` and their certificate directory with mode
+> `0700`; these permissions protect them from other local users but do not encrypt them.
+> Treat the Ubuntu account, its home directory, backups, and host root access as part of
+> the trusted boundary. Do not copy either file into source control, the audit volume,
+> shared storage, support bundles, or screenshots.
+
 Complete steps 2 and 4 below with the generated public certificate. Then verify the
 configuration and a real tenant read:
 

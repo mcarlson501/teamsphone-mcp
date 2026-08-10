@@ -1,0 +1,89 @@
+name: Bug report
+description: Report reproducible incorrect or unsafe behavior
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Use synthetic data only. Remove tenant IDs,
+        UPNs, phone numbers, tokens, certificate details, and audit contents before
+        submitting. Report suspected vulnerabilities through the private security link
+        below instead of this public form.
+
+  - type: dropdown
+    id: version
+    attributes:
+      label: Version
+      description: Which version or branch exhibited the problem?
+      options:
+        - main
+        - v0.1.0 release candidate
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, architecture, Docker/Compose versions, and MCP client
+      placeholder: Ubuntu 24.04 ARM64, Docker 29.x, Compose v2, VS Code
+    validations:
+      required: true
+
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Transport
+      options:
+        - Streamable HTTP
+        - stdio
+        - Not transport-related
+    validations:
+      required: true
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior and include sanitized error codes or correlation IDs.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Provide the smallest deterministic sequence using synthetic values.
+      placeholder: |
+        1. Start the server with...
+        2. Call tool ... with synthetic arguments...
+        3. Observe...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs or result envelope
+      description: Do not include credentials, tenant/customer identifiers, real phone numbers, PFX data, or private keys.
+      render: shell
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety checks
+      options:
+        - label: I used only synthetic data and removed all tenant/customer identifiers and credentials.
+          required: true
+        - label: This is not a suspected security vulnerability requiring private disclosure.
+          required: true

@@ -363,8 +363,8 @@ All 10 Phase A tools + Pester suites + the §9 audit pipeline (JSONL schema, red
 **M5.5 — Diagnostics & reporting (Phases B–C) + Phase F audit tools (complete)**
 Read-only, so lower risk than M5 but the highest adoption value: diagnose-user-voice, trace-call-flow, run-tenant-health-check, the report-* set, and query-audit-log/get-change-detail/export-audit-report. ✅ Health check against the deliberately misconfigured dev tenant surfaces seeded faults with correct findings/fix text; export-audit-report renders the M3–M5 change history.
 
-**M6 — Hardening + docs + container**
-Rate limiting, log scrubber test, Dockerfile with pinned module, docs complete, GitHub Actions CI (build, unit, Pester, lint, secret-scan), first tagged release. ✅ `docker compose up` + documented Entra setup → working server in under 15 minutes on a clean machine.
+**M6 — Hardening + docs + container (implementation complete; tag pending acceptance)**
+Rate limiting, log scrubber test, Dockerfile with pinned module, docs, and GitHub Actions CI (build, unit, Pester, lint, secret-scan) are implemented. The first tag is the release outcome and remains gated on M6.5 external acceptance. ✅ `docker compose up` + documented Entra setup → working server in under 15 minutes on a clean machine.
 
 **M6.5 — Adoption & trust surface (implementation complete; external acceptance pending)**
 Two deliverables, both aimed at the single biggest adoption barrier (Entra app setup) and the single biggest differentiator (write safety). Neither changes the tool catalog. See §14 for scope.
