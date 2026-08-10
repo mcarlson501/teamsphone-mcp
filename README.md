@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/mcarlson501/teamsphone-mcp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mcarlson501/teamsphone-mcp/actions/workflows/ci.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/mcarlson501/teamsphone-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/mcarlson501/teamsphone-mcp)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14017/badge)](https://www.bestpractices.dev/projects/14017)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
 
 **A safety-focused Model Context Protocol (MCP) server for Microsoft Teams Phone
