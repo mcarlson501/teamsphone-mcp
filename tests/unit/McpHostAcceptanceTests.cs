@@ -20,6 +20,15 @@ public class McpHostAcceptanceTests : IClassFixture<WebApplicationFactory<Progra
     }
 
     [Fact]
+    public async Task Initialize_ReportsProductVersion()
+    {
+        await using var client = await CreateMcpClientAsync();
+
+        Assert.Equal("TeamsPhoneMcp.Host", client.ServerInfo.Name);
+        Assert.Equal("0.1.0", client.ServerInfo.Version);
+    }
+
+    [Fact]
     public async Task ListTools_ExposesManifestParityContracts()
     {
         await using var client = await CreateMcpClientAsync();

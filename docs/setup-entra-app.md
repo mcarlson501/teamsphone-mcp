@@ -16,6 +16,56 @@ authenticates with a **certificate** (never a client secret). This guide walks t
 
 ---
 
+## Recommended guided setup for `v0.1.0`
+
+On Ubuntu, use the Docker-only bootstrap after completing step 1 and obtaining the
+directory tenant ID and application client ID:
+
+```bash
+./scripts/init.sh prepare \
+  --tenant-id '<directory-tenant-id>' \
+  --client-id '<application-client-id>'
+```
+
+The command:
+
+- builds `teamsphone-mcp:local` from the tagged source;
+- generates an unencrypted evaluation PFX and public `.cer` under
+  `~/.config/teamsphone-mcp`;
+- writes the Compose `.env` with independent random bearer and signing keys;
+- applies mode `0700` to the certificate directory and `0600` to secret files on Linux;
+- defaults the server to `TEAMSPHONE_MCP_MODE=whatif`; and
+- prints the public certificate path, thumbprint, expiry, and exact remaining Entra
+  permission and role steps without printing any secret.
+
+The generated PFX relies on its mode-`0600` file permission rather than a stored
+password, avoiding a second cleartext secret beside the private key. Use the manual path
+below when organizational policy requires a password-protected PFX.
+
+Complete steps 2 and 4 below with the generated public certificate. Then verify the
+configuration and a real tenant read:
+
+```bash
+./scripts/init.sh verify --user-upn 'demo.user@example.com'
+```
+
+Verification validates and starts Compose, checks the bearer-authenticated HTTP endpoint,
+and calls `get-user-voice-config`. A pass includes a correlation ID. On macOS or Windows,
+or when using a locally installed .NET 8 SDK instead of Docker host networking, run:
+
+```bash
+dotnet run --project src/TeamsPhoneMcp.Host -- \
+  init prepare --tenant-id '<directory-tenant-id>' --client-id '<application-client-id>'
+dotnet run --project src/TeamsPhoneMcp.Host -- \
+  init verify --user-upn 'demo.user@example.com'
+```
+
+PowerShell users can invoke the same implementation with `scripts/init.ps1`. The manual
+certificate and configuration steps below remain supported for operators who cannot use
+the generated test certificate.
+
+---
+
 ## 1. Register the Entra application
 
 1. Sign in to the [Microsoft Entra admin center](https://entra.microsoft.com) as an
@@ -52,6 +102,12 @@ in **application** mode. That requires both an API permission and a directory ro
 > permissions. `CallRecords.Read.All` is an application-only permission and requires
 > admin consent; detailed call records remain available for 30 days, while PSTN usage
 > requests may span at most 90 days.
+
+Microsoft's [Teams PowerShell application-authentication guidance](https://learn.microsoft.com/microsoftteams/teams-powershell-application-authentication)
+requires `Organization.Read.All` for all Teams cmdlets and `User.Read.All` for the
+non-`*-Cs` surface used here. Do not add a **Skype and Teams Tenant Admin API** permission;
+Microsoft warns that configuring it can cause authentication failures. Tenant access is
+authorized by the Entra role assigned in the next section.
 
 ### 2b. Teams admin role
 

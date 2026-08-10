@@ -18,6 +18,12 @@ each layer is faster and more isolated than the one below it.
 
 ---
 
+For formal `v0.1.0` sign-off on a separate Ubuntu host, including guided setup,
+VS Code, security refusals, real what-if ceilings, write restoration, and evidence
+capture, follow the [external release test plan](v0.1-release-test-plan.md).
+
+---
+
 ## Prerequisites
 
 - **.NET 8 SDK** (pinned via `global.json`).

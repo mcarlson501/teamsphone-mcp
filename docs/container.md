@@ -4,15 +4,34 @@ The container packages the .NET host, PowerShell 7.4.6, MicrosoftTeams 7.8.0,
 and all validated tool manifests. It supports Linux AMD64 and ARM64, runs as a
 non-root user, binds to localhost by default, and starts in `whatif` mode.
 
+Version `0.1.0` publishes source archives only. Download and extract the `v0.1.0`
+GitHub release source, or check out that tag, then run Compose from the source tree.
+No prebuilt TeamsPhone MCP image is published to a container registry; Compose builds
+the local `teamsphone-mcp:local` image from the Dockerfile.
+
 ## Prerequisites
 
 - Docker Engine or Docker Desktop with Compose v2
-- An Entra app and password-protected PFX from
+- An Entra app and PFX from
   [setup-entra-app.md](setup-entra-app.md)
 
 ## Configure
 
-Copy the environment template and fill every blank value:
+The recommended Ubuntu path generates the PFX, secrets, and `.env`, then prints the
+remaining Entra steps:
+
+```bash
+./scripts/init.sh prepare \
+  --tenant-id '<directory-tenant-id>' \
+  --client-id '<application-client-id>'
+```
+
+After uploading the generated public certificate and completing consent/role setup,
+run `./scripts/init.sh verify --user-upn 'demo.user@example.com'`. See the
+[`v0.1.0` release test plan](v0.1-release-test-plan.md) for clean-host and VS Code
+acceptance.
+
+For manual configuration, copy the environment template and fill every blank value:
 
 ```bash
 cp .env.example .env
@@ -62,10 +81,11 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:5199/mcp \
 Audit records persist in the named `audit` volume. Back it up according to the
 retention and evidence requirements in [audit.md](audit.md).
 
-Rebuild after pulling an update:
+To update, obtain the newer tagged source or archive, preserve the existing `.env` and
+audit volume, then rebuild the local image. `docker compose pull` does not update
+TeamsPhone MCP because there is no published application image.
 
 ```bash
-docker compose pull --ignore-buildable
 docker compose build --pull
 docker compose up --detach
 ```
