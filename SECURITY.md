@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please report suspected vulnerabilities privately using GitHub's
-[private security advisory](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability)
+[private vulnerability report](https://github.com/mcarlson501/teamsphone-mcp/security/advisories/new)
 feature for this repository. Do **not** open a public issue for security reports.
 
 We aim to acknowledge reports within a few business days.
@@ -12,14 +12,10 @@ We aim to acknowledge reports within a few business days.
 
 This project is pre-release, under active development, and not approved for
 production or live-tenant use. There are no production-supported versions or security
-service-level commitments. The current implementation does not connect to
-Microsoft Teams, Microsoft Graph, or Microsoft 365 and does not accept tenant
-credentials.
-
-The controls below describe the implemented host, policy, and offline tenant-session
-boundary. Credential handling, PowerShell execution, and live tenant isolation remain
-M2 work and must pass their milestone security tests before any live integration is
-considered.
+service-level commitments. The current implementation can connect to Microsoft Teams,
+Microsoft Graph, and Microsoft 365 when an operator explicitly configures certificate
+credentials. Use only a dedicated non-production tenant while the project remains
+experimental.
 
 ## Security model (summary)
 
@@ -47,11 +43,14 @@ tenants, so security is treated as acceptance-blocking, not optional:
   token are all rejected. A token is **single use**: it carries a random `jti` that is
   recorded on redemption, so a write that fails after redemption needs a fresh
   dry-run rather than a retry with the old token.
-- **Tenant isolation is being built offline first.** The session manager binds each
-  session to an immutable tenant and credential reference, coordinates reads/writes,
-  and has interleaved isolation tests. Real credentials and runspaces are not connected
-  yet; live isolation must be proven again when those adapters land. Until then, this
-  project must not connect to live tenants.
+- **Tenant sessions are identity-bound.** The session manager binds each session to an
+  immutable tenant and credential reference, coordinates reads and writes, and has
+  interleaved isolation tests. Certificate credentials and PowerShell runspaces are
+  available for explicit non-production testing.
+- **Contributed PowerShell is not sandboxed yet.** Until the S3 constrained-execution
+  milestone lands, a merged `run.ps1` executes in-process with FullLanguage access and
+  must be reviewed as host-trusted code. The project does not yet accept untrusted
+  third-party tool implementations.
 
 ## Supported versions
 
