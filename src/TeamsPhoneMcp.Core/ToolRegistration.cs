@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using System.Reflection;
+using ModelContextProtocol.Protocol;
 using TeamsPhoneMcp.Core.Execution;
 using TeamsPhoneMcp.Core.Manifests;
 using TeamsPhoneMcp.Core.Policy;
@@ -54,7 +55,14 @@ public static class ToolRegistration
         builder.Services.AddSingleton<IMcpRequestSessionAccessor>(services =>
             services.GetRequiredService<McpRequestSessionAccessor>());
         builder.Services.Configure<McpServerOptions>(options =>
-            options.Filters.Message.IncomingFilters.Add(McpSessionPolicyStore.CreateInitializationFilter()));
+        {
+            options.ServerInfo = new Implementation
+            {
+                Name = options.ServerInfo?.Name ?? "TeamsPhoneMcp.Host",
+                Version = GetProductVersion(),
+            };
+            options.Filters.Message.IncomingFilters.Add(McpSessionPolicyStore.CreateInitializationFilter());
+        });
         builder.Services.AddSingleton<IToolManifestCatalog>(sp =>
         {
             var env = sp.GetRequiredService<IHostEnvironment>();
@@ -97,6 +105,16 @@ public static class ToolRegistration
         RegisterManifestPipelineTools(builder.Services);
 
         return builder;
+    }
+
+    private static string GetProductVersion()
+    {
+        var informationalVersion = typeof(ToolRegistration).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion;
+
+        return informationalVersion?.Split('+', 2)[0]
+            ?? throw new InvalidOperationException("The product version is missing from the Core assembly.");
     }
 
     /// <summary>

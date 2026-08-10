@@ -93,11 +93,28 @@ portals, change review, least-privilege access, or operational oversight.
 - Execution requires a short-lived HMAC confirmation token bound to the tenant, tool,
   and exact business parameters.
 - Risk tiers and blast-radius limits govern write behavior.
-- Server-wide and per-session `whatif` or `readonly` ceilings can prevent execution.
+- Server-wide `readonly` or `whatif` ceilings and per-client or per-session `whatif`
+  ceilings can prevent execution.
 - HTTP fails closed without a bearer token and applies per-session rate limits.
 - There is no arbitrary command or script execution tool.
 - Tenant credentials are certificate-based, tenant-bound, and supplied through local
   configuration—never built into the repository.
+
+### Why not just run the PowerShell yourself?
+
+TeamsPhone MCP makes write approval structural: the first call produces a plan and a
+parameter-bound confirmation token, changed parameters are refused, the exact confirmed
+plan executes once, and every attempt is auditable. An operator-set what-if ceiling can
+remove the execution path entirely.
+
+![Write-safety demonstration showing dry-run, refusal, execution, audit retrieval, and what-if](./docs/assets/safety-demo.gif)
+
+Run the checked-in demonstration yourself with `./scripts/demo-safety.sh`. It uses the
+synthetic mock write tool and never contacts Microsoft 365. The replayable terminal
+recording is in [`docs/assets/safety-demo.cast`](./docs/assets/safety-demo.cast), and the
+assets can be regenerated with `./scripts/record-safety-demo.sh`. The full host-enforced
+protocol is specified in
+[`teamsphone-mcp-build-spec` §6.4](./teamsphone-mcp-build-spec#64-write-safety-protocol-host-enforced-non-bypassable).
 
 ## How it works
 
@@ -209,47 +226,62 @@ The recommended path uses Docker Compose:
 - A Microsoft Entra application with app-only certificate authentication
 - An MCP client that supports Streamable HTTP
 
+Version `0.1.0` is distributed as GitHub source archives; no prebuilt container image is
+published. Extract the tagged source and run Compose from that directory. Compose builds
+the local `teamsphone-mcp:local` image before starting it.
+
 For local development, install the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
 and PowerShell. The container already includes the pinned .NET runtime, PowerShell, and
 MicrosoftTeams module.
 
-### 1. Prepare Microsoft 365 access
+### 1. Register the Entra application
 
-Follow [Set up an Entra app](./docs/setup-entra-app.md) to register an application,
-grant the required Microsoft Graph permissions and Teams role, and create a
-certificate. Use a non-production tenant and grant only the permissions needed by the
-tools you intend to call.
+Create a single-tenant Entra app in the non-production tenant and note its directory
+tenant ID and application client ID. The guided setup prints the remaining certificate,
+permission, consent, and role steps. The complete portal path and manual fallback are in
+[Set up an Entra app](./docs/setup-entra-app.md).
 
-### 2. Configure the server
-
-```bash
-cp .env.example .env
-```
-
-Fill in the tenant, client, and certificate values. Generate separate random values for
-the HTTP bearer token and confirmation-token signing key:
+### 2. Prepare local configuration
 
 ```bash
-openssl rand -base64 32
-openssl rand -base64 32
+./scripts/init.sh prepare \
+  --tenant-id '<directory-tenant-id>' \
+  --client-id '<application-client-id>'
 ```
 
-The default Compose configuration binds to `127.0.0.1`, persists audit records in a
-named volume, and starts in `whatif` mode.
+This Docker-only command builds the local image, generates a one-year test certificate,
+writes the gitignored `.env`, stores the password-protected PFX under
+`~/.config/teamsphone-mcp`, and creates independent random bearer and confirmation-token
+keys. Generated secret files are mode `0600` on Linux and the server starts in `whatif`.
+No private key, PFX password, bearer token, or signing key is printed.
 
-### 3. Start the server
+Upload the public `.cer` path printed by the command to the Entra app, grant the printed
+Graph application permissions and admin consent, and assign Teams Communications
+Administrator to the service principal.
+
+### 3. Verify tenant connectivity
 
 ```bash
-docker compose config --quiet
-docker compose up --build --detach
+./scripts/init.sh verify --user-upn 'demo.user@example.com'
 ```
+
+The verifier validates Compose, starts the server, checks the HTTP authentication gate,
+and calls `get-user-voice-config` against the configured tenant. It prints the successful
+correlation ID or a remediation category without exposing credential material.
+
+### 4. Connect the MCP client
+
+The default Compose configuration binds to `127.0.0.1:5199`, persists audit records in a
+named volume, and remains in `whatif` mode after verification.
 
 Connect your MCP client to `http://127.0.0.1:5199/mcp` using Streamable HTTP and
 configure it with the HTTP bearer credential from `.env`.
 
 Calls to tenant tools use the configured tenant ID and `credentialRef: "default"`.
 See the [container guide](./docs/container.md) for certificate mounts, verification,
-audit persistence, updates, and shutdown instructions.
+audit persistence, updates, and shutdown instructions. The complete clean-Ubuntu,
+VS Code, demo-tenant, and release sign-off sequence is in the
+[`v0.1.0` release test plan](./docs/v0.1-release-test-plan.md).
 
 ### Local stdio option
 
@@ -269,6 +301,7 @@ policy controls still apply.
 | --- | --- | --- |
 | HTTP bearer token | `TEAMSPHONE_MCP_BEARER_TOKEN` | Required for HTTP |
 | Named client tokens | `Auth__ClientTokens__<clientId>` | One token per caller; several accepted at once |
+| Per-client what-if ceiling | `Auth__ClientPolicy__<clientId>__WhatIfMode` | `false` |
 | Confirmation signing key | `TEAMSPHONE_MCP_CONFIRMATION_TOKEN_KEY` | Ephemeral key if omitted |
 | Server execution ceiling | `TEAMSPHONE_MCP_MODE` | `full` outside Compose; Compose uses `whatif` |
 | HTTP bind address | `ASPNETCORE_URLS` | Host configuration |
@@ -292,6 +325,7 @@ entry instead:
 ```bash
 export Auth__ClientTokens__orchestrator='…'
 export Auth__ClientTokens__inspector='…'
+export Auth__ClientPolicy__inspector__WhatIfMode=true
 ```
 
 Every configured token is accepted simultaneously, so rotation is: add the new entry,
@@ -302,10 +336,16 @@ audit trail could not then tell them apart. A session belongs to the client that
 it: presenting another client's `Mcp-Session-Id` is rejected with `401`, as is a request
 that repeats the header, since the session it names would then be ambiguous.
 
+The optional client policy above restricts `inspector` to simulation only. Because the
+operator sets this ceiling, the client cannot decline it: every write returns
+`simulated: true` and no confirmation token is issued, even when the client requests
+execution. The policy key must match a configured client token or the server refuses to
+start, preventing a misspelled client id from silently retaining write access.
+
 ## Project status and roadmap
 
-Milestones M1–M5.5 are complete. M6 hardening is in progress, including documentation
-polish and preparation for the first supported release.
+Milestones M1–M6.5 are implemented for the `v0.1.0` release candidate. Clean-Ubuntu,
+VS Code, and demo-tenant acceptance remains before the first tag.
 
 Implemented today:
 
@@ -313,6 +353,8 @@ Implemented today:
 - Certificate-authenticated Microsoft 365 tenant sessions
 - Read, diagnostic, reporting, local audit, and user-level write tools
 - Container packaging and automated .NET, Pester, and secret-scanning checks
+- Guided certificate/configuration setup with a real tenant connectivity self-test
+- A reproducible, CI-gated write-safety and audit demonstration
 
 Planned:
 
@@ -322,6 +364,10 @@ Planned:
 
 The detailed milestone history and acceptance criteria are in
 [`teamsphone-mcp-build-spec`](./teamsphone-mcp-build-spec).
+Version-specific changes and operational constraints are recorded in
+[`CHANGELOG.md`](./CHANGELOG.md).
+The formal external acceptance gates are in the
+[`v0.1.0` release test plan](./docs/v0.1-release-test-plan.md).
 
 ## Development
 

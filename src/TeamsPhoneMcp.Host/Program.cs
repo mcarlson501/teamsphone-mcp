@@ -21,7 +21,11 @@ public class Program
 {
     public static async Task Main(string[] args)
     {
-        if (UseStdio(args))
+        if (IsInitCommand(args))
+        {
+            Environment.ExitCode = await InitCommand.RunAsync(args[1..], Console.Out, Console.Error);
+        }
+        else if (UseStdio(args))
         {
             await RunStdioAsync(args);
         }
@@ -30,6 +34,9 @@ public class Program
             await RunHttpAsync(args);
         }
     }
+
+    internal static bool IsInitCommand(string[] args) =>
+        args.Length > 0 && string.Equals(args[0], "init", StringComparison.OrdinalIgnoreCase);
 
     internal static bool UseStdio(string[] args) =>
         args.Contains("--stdio", StringComparer.OrdinalIgnoreCase) ||

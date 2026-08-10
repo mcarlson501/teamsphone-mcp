@@ -366,9 +366,9 @@ Read-only, so lower risk than M5 but the highest adoption value: diagnose-user-v
 **M6 — Hardening + docs + container**
 Rate limiting, log scrubber test, Dockerfile with pinned module, docs complete, GitHub Actions CI (build, unit, Pester, lint, secret-scan), first tagged release. ✅ `docker compose up` + documented Entra setup → working server in under 15 minutes on a clean machine.
 
-**M6.5 — Adoption & trust surface**
+**M6.5 — Adoption & trust surface (implementation complete; external acceptance pending)**
 Two deliverables, both aimed at the single biggest adoption barrier (Entra app setup) and the single biggest differentiator (write safety). Neither changes the tool catalog. See §14 for scope.
-✅ A voice-generalist admin who has never registered an Entra app gets from clean machine to a successful `get-user-voice-config` call using only `init` + the README; ✅ the safety demo shows an execute attempt refused without a valid confirmation token.
+Acceptance pending for `v0.1.0`: a voice-generalist admin who has never registered an Entra app gets from a clean Ubuntu machine to a successful `get-user-voice-config` call using only `init` + the README; the safety demo and live demo-tenant tests show that invalid execution is refused and what-if ceilings cannot mutate tenant state.
 
 **M7 (post-v1)** — Phase E shared-object writes, Key Vault credential provider, OTel exporter, hash-chained audit option, ghcr/npm publishing, MCP catalog listings.
 
@@ -397,6 +397,8 @@ Two deliverables, both aimed at the single biggest adoption barrier (Entra app s
 
 Assumed deployment model for v1: **self-hosted**. A hosted-by-the-maintainer instance would have to hold a certificate carrying Teams Communications Administrator in someone else's tenant, which is a security-review non-starter for most organizations and puts the customer's own audit evidence outside their boundary. Any hosted offering is therefore scoped to (a) `readonly`/`whatif` evaluation against a demo tenant, or (b) an existing consulting engagement — never general SaaS. A hosted control plane paired with a customer-side execution agent is the only credible general-purpose hosted shape and is explicitly out of scope for v1. Everything below optimizes the self-host path instead.
 
+**v0.1.0 release decision:** M6.5 is included in the first tagged release rather than deferred until after it. The implementation is complete when both subsections below are reproducible from the tagged source archive. Release acceptance remains pending until the full clean-Ubuntu, VS Code, and demo-tenant plan in `docs/v0.1-release-test-plan.md` passes against the exact candidate commit.
+
 ### 14.1 Shrink Entra setup to one command
 
 `docs/setup-entra-app.md` is accurate but is a ~30-minute manual click-through, and it is the point where non-voice-specialist admins abandon the project. Ship a first-run bootstrap that collapses it.
@@ -409,7 +411,18 @@ Scope:
 - Writes the `credentialRef` entry into local config for the operator, then runs a **connectivity self-test**: open a session, call `get-user-voice-config` (or an equivalent tier-0 probe), and report a clear pass/fail with a remediation hint per failure mode (consent missing, role not assigned, cert not uploaded, wrong tenant).
 - Defaults the new install to `TEAMSPHONE_MCP_MODE=whatif`, and says so in the output.
 
-Acceptance: a clean machine goes from nothing to a green self-test using `init` plus the README alone, with no other document open.
+Implemented candidate surface:
+- `teamsphone-mcp init prepare` generates the test certificate, public certificate, independent bearer/signing keys, and Compose `.env`; emits concrete Entra steps; defaults to `whatif`; and never prints generated secrets.
+- `teamsphone-mcp init verify` validates/starts Compose, checks the HTTP auth gate, opens a session, and calls `get-user-voice-config` against the configured tenant with remediation by failure category.
+- `scripts/init.sh` provides the Docker-only Ubuntu path; `scripts/init.ps1` forwards to the same implementation for PowerShell users.
+
+Acceptance:
+- A clean Ubuntu host using the source archive and README reaches a green tenant self-test with Docker Compose and no hand-authored server config.
+- The certificate directory is mode `0700`; `.env` and the PFX are mode `0600`; no generated secret appears in command output, logs, source control, or the audit root.
+- The generated certificate has a private key, one-year validity, digital-signature/key-encipherment usage, and client-authentication EKU; the printed public certificate thumbprint matches the Entra upload.
+- Missing certificate upload, consent, Teams role, PFX password, or tenant access fails closed with a useful remediation category and no credential disclosure.
+- The self-test returns `Succeeded` from `get-user-voice-config`, prints a correlation ID, and leaves the server in operator-enforced `whatif` mode.
+- The full external evidence for M65-SETUP-01 through M65-SETUP-06 is recorded before tagging.
 
 ### 14.2 Make the write-safety story visible
 
@@ -421,7 +434,17 @@ Scope:
 - The recording must be reproducible from a checked-in script against the dev tenant or a mocked execution factory, so it can be re-cut when the envelope changes rather than silently going stale.
 - README gains a short "Why not just write the PowerShell yourself?" section pointing at the recording and at §6.4.
 
-Acceptance: the refusal path — not just the happy path — is visible in the recording, and the script that produces it lives in the repo.
+Implemented candidate surface:
+- `scripts/demo-safety.sh` runs the complete protocol against an isolated container and synthetic mock write; it asserts every expected result and contacts no Microsoft 365 tenant.
+- `docs/assets/safety-demo.cast` is the replayable recording and `docs/assets/safety-demo.gif` is embedded in the README.
+- The container CI job reruns the script, so the recording's claimed behavior cannot silently drift from the implementation.
+
+Acceptance:
+- The recording and script show, in order: default dry-run with a token, changed-parameter refusal, exact confirmed execution, audit retrieval by correlation ID, and tokenless session what-if simulation.
+- The script exits nonzero if any status, error code, token condition, or audit match differs from the expected protocol.
+- With a real demo-tenant fixture, server and per-client what-if ceilings each return `simulated: true`, issue no token, and leave tenant state unchanged.
+- In explicitly enabled full mode, a dedicated fixture completes dry-run, confirmation, execution, verification, audit retrieval, and restoration to baseline.
+- The full external evidence for M65-SAFETY-01 through M65-SAFETY-03 and M65-AUDIT-01 is recorded before tagging.
 
 ---
 

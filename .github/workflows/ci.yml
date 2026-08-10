@@ -183,6 +183,41 @@ jobs:
             test -w /data/audit
           '
 
+      - name: Demonstrate write safety
+        env:
+          TEAMSPHONE_MCP_DEMO_IMAGE: teamsphone-mcp:ci
+          TEAMSPHONE_MCP_DEMO_SKIP_BUILD: "true"
+        run: ./scripts/demo-safety.sh
+
+      - name: Verify guided setup
+        shell: bash
+        run: |
+          init_root="$(mktemp --directory)"
+          trap 'rm --recursive --force "${init_root}"' EXIT
+          cp docker-compose.yml "${init_root}/docker-compose.yml"
+          mkdir "${init_root}/credentials"
+          chmod 700 "${init_root}/credentials"
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/tmp \
+            --volume "${init_root}:${init_root}" \
+            --workdir "${init_root}" \
+            --entrypoint dotnet \
+            teamsphone-mcp:ci \
+            /app/TeamsPhoneMcp.Host.dll init prepare \
+            --tenant-id 11111111-1111-1111-1111-111111111111 \
+            --client-id 22222222-2222-2222-2222-222222222222 \
+            --project-directory "${init_root}" \
+            --env-file "${init_root}/.env" \
+            --certificate-directory "${init_root}/credentials"
+          test "$(stat --format '%a' "${init_root}/.env")" = 600
+          test "$(stat --format '%a' "${init_root}/credentials/teamsphone-mcp-default.pfx")" = 600
+          grep --quiet '^TEAMSPHONE_MCP_MODE=whatif$' "${init_root}/.env"
+          docker compose \
+            --project-directory "${init_root}" \
+            --env-file "${init_root}/.env" \
+            config --quiet
+
       - name: Smoke test HTTP transport
         shell: bash
         run: |
