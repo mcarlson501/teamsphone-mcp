@@ -2,7 +2,6 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using TeamsPhoneMcp.Core.Execution;
@@ -20,8 +19,8 @@ public sealed class SessionWhatIfAcceptanceTests
     public async Task SessionWhatIfMode_ForcesSimulationAndIssuesNoToken()
     {
         var executor = new FakeStageExecutor();
-        await using var factory = CreateFactory(executor);
-        using var client = factory.CreateClient();
+        await using var host = CreateServerHost(executor);
+        using var client = host.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", BearerToken);
 
         var sessionId = await InitializeSessionAsync(client, whatIfMode: true);
@@ -34,8 +33,8 @@ public sealed class SessionWhatIfAcceptanceTests
     [Fact]
     public async Task SessionWhatIfMode_ForcesSimulationForAttributedWriteTool()
     {
-        await using var factory = CreateFactory(new FakeStageExecutor());
-        using var client = factory.CreateClient();
+        await using var host = CreateServerHost(new FakeStageExecutor());
+        using var client = host.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", BearerToken);
 
         var sessionId = await InitializeSessionAsync(client, whatIfMode: true);
@@ -82,8 +81,8 @@ public sealed class SessionWhatIfAcceptanceTests
     public async Task ServerWhatIfMode_ForcesSimulationAndIssuesNoToken()
     {
         var executor = new FakeStageExecutor();
-        await using var factory = CreateFactory(executor, serverMode: "whatif");
-        using var client = factory.CreateClient();
+        await using var host = CreateServerHost(executor, serverMode: "whatif");
+        using var client = host.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", BearerToken);
 
         var sessionId = await InitializeSessionAsync(client, whatIfMode: false);
@@ -96,8 +95,8 @@ public sealed class SessionWhatIfAcceptanceTests
     [Fact]
     public async Task InvalidSessionWhatIfMode_IsRejectedDuringInitialization()
     {
-        await using var factory = CreateFactory(new FakeStageExecutor());
-        using var client = factory.CreateClient();
+        await using var host = CreateServerHost(new FakeStageExecutor());
+        using var client = host.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", BearerToken);
 
         var response = await PostAsync(
@@ -122,10 +121,10 @@ public sealed class SessionWhatIfAcceptanceTests
         Assert.Contains("whatIfMode", error.GetProperty("message").GetString(), StringComparison.Ordinal);
     }
 
-    private static WebApplicationFactory<Program> CreateFactory(
+    private static TestServerHost CreateServerHost(
         FakeStageExecutor executor,
         string? serverMode = null) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        new(builder =>
         {
             builder.UseSetting("TEAMSPHONE_MCP_BEARER_TOKEN", BearerToken);
             if (serverMode is not null)
@@ -214,12 +213,12 @@ public sealed class SessionWhatIfAcceptanceTests
         return sessionId;
     }
 
-    private static Task<HttpResponseMessage> PostAsync(
+    private static async Task<HttpResponseMessage> PostAsync(
         HttpClient client,
         object payload,
         string? sessionId = null)
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, "/mcp")
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/mcp")
         {
             Content = JsonContent.Create(payload),
         };
@@ -231,7 +230,7 @@ public sealed class SessionWhatIfAcceptanceTests
             request.Headers.Add("MCP-Protocol-Version", ProtocolVersion);
         }
 
-        return client.SendAsync(request);
+        return await client.SendAsync(request);
     }
 
     private static async Task<JsonElement> ReadJsonRpcPayloadAsync(HttpResponseMessage response)

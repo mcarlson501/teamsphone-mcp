@@ -480,8 +480,9 @@ This is not a theoretical concern for this project specifically: §3's core valu
 - No `Add-Type`, no arbitrary `New-Object`, restricted execution policy, no provider access outside what tools legitimately need.
 - Enforce `timeoutSeconds` with a hard `PowerShell.Stop()` plus runspace disposal rather than cooperative cancellation, so a wedged tool cannot hold the per-tenant write lock indefinitely.
 - Re-run the full Pester suite under the constrained state; any tool that breaks is a tool doing something it should not.
+- Add deterministic FsCheck properties for the third-party tool boundary. Generate manifest YAML, tool ids and path segments, and structured PowerShell command spellings (including qualification, aliases, casing, and quoting) through manifest validation, script location, the analyzer gate, and constrained-runspace admission. Bound the case and time budgets for CI, use reproducible seeds, and promote every discovered counterexample to a named regression test.
 
-✅ A test tool attempting `[System.IO.File]::ReadAllText(...)`, `Add-Type`, or an outbound socket fails at the runspace boundary rather than at review time; the §10 isolation test is extended to assert a tool cannot read another session's state.
+✅ A test tool attempting `[System.IO.File]::ReadAllText(...)`, `Add-Type`, or an outbound socket fails at the runspace boundary rather than at review time; the §10 isolation test is extended to assert a tool cannot read another session's state; seeded FsCheck properties run in normal CI and demonstrate that generated tool definitions and scripts cannot escape the tools root, bypass command normalization or the allowlist, or crash or hang the validation boundary.
 
 ### S4 — Untrusted data handling & data-at-rest (post-v1, with M7)
 

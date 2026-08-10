@@ -1,6 +1,5 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
 using TeamsPhoneMcp.Audit;
@@ -22,7 +21,7 @@ public sealed class AuditPipelineAcceptanceTests : IDisposable
 
     public void Dispose() => _auditRoot.Dispose();
 
-    private async Task<McpClient> CreateClientAsync(WebApplicationFactory<Program> factory)
+    private async Task<McpClient> CreateClientAsync(TestServerHost factory)
     {
         var httpClient = factory.CreateClient();
         httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", BearerToken);
@@ -40,8 +39,8 @@ public sealed class AuditPipelineAcceptanceTests : IDisposable
         return await McpClient.CreateAsync(transport);
     }
 
-    private WebApplicationFactory<Program> CreateFactory() =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+    private TestServerHost CreateFactory() =>
+        new(builder =>
         {
             builder.UseSetting("TEAMSPHONE_MCP_BEARER_TOKEN", BearerToken);
             builder.UseSetting("Audit:RootPath", _auditRoot.Path);
