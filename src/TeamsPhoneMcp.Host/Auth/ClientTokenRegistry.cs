@@ -64,8 +64,8 @@ internal sealed class BearerAuthOptionsValidator : IValidateOptions<BearerAuthOp
             if (!configuredClients.Contains(clientId))
             {
                 failures.Add(
-                    $"Auth: Auth:ClientPolicy:{clientId} does not match any configured client. " +
-                    "Add a token for it under Auth:ClientTokens, or remove the policy entry.");
+                    $"Auth: the policy for client '{clientId}' does not match any configured client. " +
+                    $"Add a token for it under Auth:ClientTokens, or remove Auth:ClientPolicy:{clientId}.");
             }
         }
 
