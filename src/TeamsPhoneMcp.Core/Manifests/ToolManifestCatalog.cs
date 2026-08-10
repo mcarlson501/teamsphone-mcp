@@ -118,7 +118,8 @@ public sealed class ToolManifestCatalog : IToolManifestCatalog
     private static void ValidateRequiredKeys(string yaml, string manifestPath)
     {
         var yamlStream = new YamlStream();
-        yamlStream.Load(new StringReader(yaml));
+        using var reader = new StringReader(yaml);
+        yamlStream.Load(reader);
         if (yamlStream.Documents.Count != 1 || yamlStream.Documents[0].RootNode is not YamlMappingNode root)
         {
             throw new InvalidOperationException($"Manifest '{manifestPath}' must contain exactly one YAML mapping.");

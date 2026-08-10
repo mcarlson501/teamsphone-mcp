@@ -349,8 +349,9 @@ playbook.
 ## Contributing
 
 Contributions, bug reports, and focused feature proposals are welcome. Please read
-[`CONTRIBUTING.md`](./CONTRIBUTING.md) before opening a pull request, and open an issue
-before beginning a broad architectural change.
+[`CONTRIBUTING.md`](./CONTRIBUTING.md) before opening a pull request, and
+[open an issue](https://github.com/mcarlson501/teamsphone-mcp/issues) before beginning
+a broad architectural change.
 
 Use synthetic data only. Do not include tenant names, customer identifiers, real phone
 numbers, certificates, or credentials in issues, tests, examples, or pull requests.

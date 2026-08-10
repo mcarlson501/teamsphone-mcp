@@ -1,7 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
 using TeamsPhoneMcp.Host;
@@ -49,8 +48,7 @@ public sealed class M55IntegrationTests : IDisposable
             return;
         }
 
-        await using var factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder =>
+        await using var factory = new TestServerHost(builder =>
             {
                 builder.UseSetting("TEAMSPHONE_MCP_BEARER_TOKEN", BearerToken);
                 builder.UseSetting("Audit:Enabled", "true");
@@ -265,7 +263,7 @@ public sealed class M55IntegrationTests : IDisposable
         return null;
     }
 
-    private static async Task<McpClient> CreateClientAsync(WebApplicationFactory<Program> factory)
+    private static async Task<McpClient> CreateClientAsync(TestServerHost factory)
     {
         var httpClient = factory.CreateClient();
         httpClient.Timeout = TimeSpan.FromMinutes(10);

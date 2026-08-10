@@ -1,6 +1,5 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
 using TeamsPhoneMcp.Host;
@@ -44,8 +43,8 @@ public class GetUserVoiceConfigIntegrationTests
         }
 
         const string token = "integration-token";
-        await using var factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder => builder.UseSetting("TEAMSPHONE_MCP_BEARER_TOKEN", token));
+        await using var factory = new TestServerHost(
+            builder => builder.UseSetting("TEAMSPHONE_MCP_BEARER_TOKEN", token));
 
         var httpClient = factory.CreateClient();
         httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);

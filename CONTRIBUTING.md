@@ -4,10 +4,13 @@ Thanks for your interest in contributing. This is a pre-release project under ac
 development. Public APIs and manifest contracts may change before the first release,
 and the repository is not ready for production or live-tenant use.
 
-The current surface includes the M1 manifest/tool/policy boundary and the offline M2
-tenant-session foundation. PowerShell, credentials, and live Microsoft 365 integration
-remain intentionally unavailable. Open an issue before starting a broad architectural
-change so the work can be aligned with the milestone plan.
+The current surface includes manifest-driven read and write tools, Streamable HTTP and
+stdio transports, certificate-authenticated tenant sessions, audit recording, and
+container packaging. M6 hardening and preparation for the first supported release are
+in progress. Report bugs and focused enhancement proposals through
+[GitHub Issues](https://github.com/mcarlson501/teamsphone-mcp/issues); open an issue
+before starting a broad architectural change so it can be aligned with the milestone
+plan.
 
 ## Ground rules (from the build spec)
 
@@ -17,6 +20,10 @@ change so the work can be aligned with the milestone plan.
   commit secrets, tenant names, or real phone numbers in code, tests, or fixtures.
 - **Use synthetic data only.** Tests, examples, issue reports, and pull requests must
   not include customer identifiers or data copied from a live tenant.
+- **Treat contributed PowerShell as host-trusted code.** Until the S3 constrained
+  execution milestone lands, `run.ps1` executes in-process with FullLanguage access.
+  Third-party tool contributions are not accepted without explicit maintainer review
+  of that risk.
 - **Small PRs.** Each milestone has acceptance criteria a human verifies before the
   next begins. Keep changes focused.
 
@@ -30,6 +37,10 @@ pwsh -NoProfile -File scripts/lint-tools.ps1
 
 For the full testing playbook — PowerShell (Pester) tests, a local server smoke test, and a
 gated live end-to-end call against a real tenant — see [docs/testing.md](docs/testing.md).
+
+Every behavior change must add or update automated tests. Major functionality requires
+happy-path coverage plus malformed-input and rejection-path coverage appropriate to its
+risk; a change is not complete until those tests pass in CI.
 
 - Target framework: **.NET 8** (pinned via `global.json`).
 - Shared build settings live in `Directory.Build.props` (`nullable`, implicit usings,

@@ -1,7 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -254,8 +253,8 @@ public sealed class GraphDiagnosticsAcceptanceTests
             finding => finding.GetProperty("code").GetString() == "resultsTruncated");
     }
 
-    private static WebApplicationFactory<Program> CreateFactory(IGraphCallRecordsClient client) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+    private static TestServerHost CreateFactory(IGraphCallRecordsClient client) =>
+        new(builder =>
         {
             builder.UseSetting("TEAMSPHONE_MCP_BEARER_TOKEN", BearerToken);
             builder.ConfigureTestServices(services =>
@@ -267,7 +266,7 @@ public sealed class GraphDiagnosticsAcceptanceTests
             });
         });
 
-    private static async Task<McpClient> CreateClientAsync(WebApplicationFactory<Program> factory)
+    private static async Task<McpClient> CreateClientAsync(TestServerHost factory)
     {
         var httpClient = factory.CreateClient();
         httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", BearerToken);
