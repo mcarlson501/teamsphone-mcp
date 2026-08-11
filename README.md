@@ -402,6 +402,10 @@ Contributions, bug reports, and focused feature proposals are welcome. Please re
 [open an issue](https://github.com/mcarlson501/teamsphone-mcp/issues) before beginning
 a broad architectural change.
 
+For setup, configuration, or usage help, read [`SUPPORT.md`](./SUPPORT.md) and use the
+linked public question form. Participation in this project is governed by the
+[`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md).
+
 Use synthetic data only. Do not include tenant names, customer identifiers, real phone
 numbers, certificates, or credentials in issues, tests, examples, or pull requests.
 

@@ -4,5 +4,5 @@ contact_links:
     url: https://github.com/mcarlson501/teamsphone-mcp/security/advisories/new
     about: Do not disclose suspected vulnerabilities in a public issue.
   - name: Setup and testing documentation
-    url: https://github.com/mcarlson501/teamsphone-mcp/tree/main/docs
-    about: Review setup, container, write-safety, audit, and testing guides before filing.
+    url: https://github.com/mcarlson501/teamsphone-mcp/blob/main/SUPPORT.md
+    about: Review the support policy and documentation before asking a public question.

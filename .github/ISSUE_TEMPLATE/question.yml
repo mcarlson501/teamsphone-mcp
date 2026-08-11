@@ -1,0 +1,85 @@
+name: Support question
+description: Ask a public setup, configuration, or usage question
+title: "[Question]: "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Questions and answers are public. Use synthetic data only and remove tenant IDs,
+        UPNs, phone numbers, tokens, certificate details, and audit contents. Report
+        vulnerabilities and conduct incidents through their private channels instead.
+
+  - type: dropdown
+    id: version
+    attributes:
+      label: Version
+      description: Which version or branch are you using?
+      options:
+        - main
+        - v0.1.0 release candidate
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, architecture, Docker/Compose versions, and MCP client
+      placeholder: Ubuntu 24.04 ARM64, Docker 29.x, Compose v2, VS Code
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Guided setup and Entra application
+        - Docker Compose and container operation
+        - Streamable HTTP transport
+        - stdio transport
+        - Tool configuration or behavior
+        - Write safety and confirmation
+        - Audit and reporting
+        - Local development and testing
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: What are you trying to do?
+      description: Describe the intended outcome and where you are blocked.
+    validations:
+      required: true
+
+  - type: textarea
+    id: attempted
+    attributes:
+      label: What have you tried?
+      description: Link the documentation you followed and describe the sanitized result.
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostic context
+      description: Include only minimal redacted output. Prefer correlation IDs and result envelopes.
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched the README, documentation, and open and closed issues first.
+          required: true
+        - label: I used only synthetic data and removed all tenant/customer identifiers and credentials.
+          required: true
+        - label: This is not a vulnerability or conduct incident requiring private reporting.
+          required: true
