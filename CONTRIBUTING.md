@@ -13,6 +13,11 @@ the tag. Report bugs and focused enhancement proposals through
 before starting a broad architectural change so it can be aligned with the milestone
 plan.
 
+Setup, configuration, and usage questions belong in the public support route described
+in [SUPPORT.md](SUPPORT.md). By participating, you agree to follow the
+[Code of Conduct](CODE_OF_CONDUCT.md); report conduct incidents through its private
+contact rather than a public issue.
+
 ## Ground rules (from the build spec)
 
 - **Deterministic execution.** The model chooses tools and parameters; server code
